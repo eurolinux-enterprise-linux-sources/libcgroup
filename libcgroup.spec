@@ -5,7 +5,7 @@ Name: libcgroup
 Summary: Tools and libraries to control and monitor control groups
 Group: Development/Libraries
 Version: 0.40.rc1
-Release: 24%{?dist}
+Release: 26%{?dist}
 License: LGPLv2+
 URL: http://libcg.sourceforge.net/
 Source0: http://downloads.sourceforge.net/libcg/%{name}-%{version}.tar.bz2
@@ -39,6 +39,7 @@ Patch21: libcgroup-0.41-infinite-loop.patch
 Patch22: libcgroup-0.41-fix-order-of-memory-subsystem-parameters.patch
 Patch23: libcgroup-0.41-change-cgroup-of-every-thread.patch
 Patch24: libcgroup-0.41-api.c-fix-potential-buffer-overflow.patch
+Patch25: libcgroup-0.41-increase-size-of-controller-values.patch
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires: pam-devel
@@ -103,6 +104,7 @@ provide scripts to manage that configuration.
 %patch22 -p1
 %patch23 -p1
 %patch24 -p1
+%patch25 -p1
 
 %build
 %configure --bindir=/bin --sbindir=/sbin --libdir=%{_libdir} --enable-initscript-install --enable-pam-module-dir=/%{_lib}/security
@@ -208,6 +210,14 @@ fi
 %doc COPYING INSTALL 
 
 %changelog
+* Tue Nov 28 2017 Nikola Forró <nforro@redhat.com> - 0.40.rc1-26
+- fix potentially unterminated string
+  related: #1441163
+
+* Thu May 11 2017 Nikola Forró <nforro@redhat.com> - 0.40.rc1-25
+- increase maximal size of controller values
+  resolves: #1441163
+
 * Fri Feb 03 2017 Nikola Forró <nforro@redhat.com> - 0.40.rc1-24
 - fix segfault in cgroup_pam.c
   resolves: #1419519
