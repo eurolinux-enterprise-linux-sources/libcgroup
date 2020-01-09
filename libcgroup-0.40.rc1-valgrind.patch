@@ -1,0 +1,42 @@
+diff -up libcgroup-0.40.rc1/src/api.c.valgrind libcgroup-0.40.rc1/src/api.c
+--- libcgroup-0.40.rc1/src/api.c.valgrind	2013-10-17 15:47:31.474927679 +0200
++++ libcgroup-0.40.rc1/src/api.c	2013-10-17 15:47:31.475927672 +0200
+@@ -3144,6 +3144,8 @@ int cgroup_change_all_cgroups(void)
+ 				procname, pid, CGFLAG_USECACHE);
+ 		if (err)
+ 			cgroup_dbg("cgroup change pid %i failed\n", pid);
++
++		free(procname);
+ 	}
+ 
+ 	closedir(dir);
+diff -up libcgroup-0.40.rc1/src/config.c.valgrind libcgroup-0.40.rc1/src/config.c
+--- libcgroup-0.40.rc1/src/config.c.valgrind	2013-10-17 15:47:31.470927000 +0200
++++ libcgroup-0.40.rc1/src/config.c	2013-10-25 14:12:37.604648251 +0200
+@@ -1460,7 +1460,7 @@ int cgroup_reload_cached_templates(char
+ 	}
+ 	template_table_index = 0;
+ 
+-	if (config_template_table_index != 0) {
++	if ((config_template_table_index != 0) || (config_table_index != 0)) {
+ 		/* config template structures have to be free as well*/
+ 		cgroup_free_config();
+ 	}
+@@ -1498,7 +1498,16 @@ int cgroup_init_templates_cache(char *pa
+ 	int ret = 0;
+ 	int i;
+ 
+-	if (config_template_table_index != 0) {
++	if (template_table) {
++		/* template structures have to be free */
++		for (i = 0; i < template_table_index; i++)
++			cgroup_free_controllers(&template_table[i]);
++		free(template_table);
++		template_table = NULL;
++	}
++	template_table_index = 0;
++
++	if ((config_template_table_index != 0) || (config_table_index != 0)) {
+ 		/* config structures have to be clean */
+ 		cgroup_free_config();
+ 	}

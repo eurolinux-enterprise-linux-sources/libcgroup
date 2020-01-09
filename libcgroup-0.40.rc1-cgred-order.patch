@@ -1,0 +1,12 @@
+diff -ur libcgroup-0.37.orig/scripts/init.d/cgred.in libcgroup-0.37/scripts/init.d/cgred.in
+--- libcgroup-0.37.orig/scripts/init.d/cgred.in	2013-08-15 13:47:27.408910000 +0200
++++ libcgroup-0.37/scripts/init.d/cgred.in	2013-08-15 13:48:12.939568065 +0200
+@@ -14,7 +14,7 @@
+ # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ #
+ # cgred		CGroups Rules Engine Daemon
+-# chkconfig:	- 14 86
++# chkconfig:	- 30 86
+ # description:	This is a daemon for automatically classifying processes \
+ #		into cgroups based on UID/GID.
+ #

@@ -1,0 +1,12 @@
+diff -up ./libcgroup-0.37/src/pam/pam_cgroup.c.old ./libcgroup-0.37/src/pam/pam_cgroup.c
+--- a/src/pam/pam_cgroup.c.old	2010-10-20 15:59:13.000000000 +0200
++++ b/src/pam/pam_cgroup.c	2013-06-13 17:50:56.000000000 +0200
+@@ -137,7 +137,7 @@ PAM_EXTERN int pam_sm_open_session(pam_h
+ 	/* Note: We are using default gid here. Is there a way to determine
+ 	 * under what egid service will be provided?
+ 	 */
+-	ret = cgroup_change_cgroup_uid_gid(pwd->pw_uid, pwd->pw_gid, pid);
++	ret = cgroup_change_cgroup_uid_gid_flags(pwd->pw_uid, pwd->pw_gid, pid, CGFLAG_USECACHE);
+ 	if (ret) {
+ 		if (ctrl & PAM_DEBUG_ARG)
+ 			pam_syslog(pamh, LOG_ERR, "Change of cgroup for process"

@@ -1,0 +1,13 @@
+diff -upr libcgroup-0.40.rc1.orig/src/api.c libcgroup-0.40.rc1/src/api.c
+--- libcgroup-0.40.rc1.orig/src/api.c	2013-09-26 10:28:26.150422000 +0200
++++ libcgroup-0.40.rc1/src/api.c	2013-09-26 13:33:20.439405038 +0200
+@@ -3140,7 +3140,8 @@ int cgroup_change_all_cgroups(void)
+ 		if (err)
+ 			continue;
+ 
+-		err = cgroup_change_cgroup_flags(euid, egid, procname, pid, 0);
++		err = cgroup_change_cgroup_flags(euid, egid,
++				procname, pid, CGFLAG_USECACHE);
+ 		if (err)
+ 			cgroup_dbg("cgroup change pid %i failed\n", pid);
+ 	}

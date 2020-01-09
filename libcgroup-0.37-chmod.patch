@@ -1,0 +1,31 @@
+diff -up libcgroup-0.40.rc1/src/api.c.chmod libcgroup-0.40.rc1/src/api.c
+--- libcgroup-0.40.rc1/src/api.c.chmod	2013-08-26 17:30:03.588276405 +0200
++++ libcgroup-0.40.rc1/src/api.c	2013-08-26 17:30:23.104126917 +0200
+@@ -156,6 +156,10 @@ static int cg_chown_file(FTS *fts, FTSEN
+ 	return ret;
+ }
+ 
++int cg_chmod_file(FTS *fts, FTSENT *ent, mode_t dir_mode,
++	int dirm_change, mode_t file_mode, int filem_change,
++	int owner_is_umask);
++
+ /*
+  * TODO: Need to decide a better place to put this function.
+  */
+@@ -163,6 +167,8 @@ static int cg_chown_recursive(char **pat
+ {
+ 	int ret = 0;
+ 	FTS *fts;
++	/* mode 664 */
++	mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
+ 
+ 	cgroup_dbg("chown: path is %s\n", *path);
+ 	fts = fts_open(path, FTS_PHYSICAL | FTS_NOCHDIR |
+@@ -180,6 +186,7 @@ static int cg_chown_recursive(char **pat
+ 			cgroup_warn("Warning: fts_read failed\n");
+ 			break;
+ 		}
++		cg_chmod_file(fts, ent, mode, 0, mode, 1, 1);
+ 		ret = cg_chown_file(fts, ent, owner, group);
+ 	}
+ 	fts_close(fts);

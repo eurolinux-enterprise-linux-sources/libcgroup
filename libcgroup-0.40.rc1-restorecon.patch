@@ -1,0 +1,11 @@
+diff -upr libcgroup-0.40.rc1.orig/scripts/init.d/cgred.in libcgroup-0.40.rc1/scripts/init.d/cgred.in
+--- libcgroup-0.40.rc1.orig/scripts/init.d/cgred.in	2013-08-27 19:52:21.205846000 +0200
++++ libcgroup-0.40.rc1/scripts/init.d/cgred.in	2013-08-27 19:55:12.713484281 +0200
+@@ -97,6 +97,7 @@ start()
+ 		return 1
+ 	fi
+ 	echo "`pidof $processname`" > $pidfile
++	[[ -x /sbin/restorecon ]] && /sbin/restorecon $pidfile
+ 	return 0
+ }
+ 

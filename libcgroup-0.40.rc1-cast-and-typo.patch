@@ -1,0 +1,24 @@
+diff -upr libcgroup-0.40.rc1.orig/src/tools/cgclassify.c libcgroup-0.40.rc1/src/tools/cgclassify.c
+--- libcgroup-0.40.rc1.orig/src/tools/cgclassify.c	2013-05-21 15:36:04.000000000 +0200
++++ libcgroup-0.40.rc1/src/tools/cgclassify.c	2013-09-12 14:56:17.008741770 +0200
+@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
+ 	}
+ 
+ 	for (i = optind; i < argc; i++) {
+-		pid = (uid_t) strtol(argv[i], &endptr, 10);
++		pid = (pid_t) strtol(argv[i], &endptr, 10);
+ 		if (endptr[0] != '\0') {
+ 			/* the input argument was not a number */
+ 			fprintf(stderr, "Error: %s is not valid pid.\n",
+diff -upr libcgroup-0.40.rc1.orig/src/tools/cgexec.c libcgroup-0.40.rc1/src/tools/cgexec.c
+--- libcgroup-0.40.rc1.orig/src/tools/cgexec.c	2013-05-21 15:36:04.000000000 +0200
++++ libcgroup-0.40.rc1/src/tools/cgexec.c	2013-09-12 14:57:17.203086321 +0200
+@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
+ 	/* Just for debugging purposes. */
+ 	uid = geteuid();
+ 	gid = getegid();
+-	cgroup_dbg("My euid and eguid is: %d,%d\n", (int) uid, (int) gid);
++	cgroup_dbg("My euid and egid is: %d,%d\n", (int) uid, (int) gid);
+ 
+ 	uid = getuid();
+ 	gid = getgid();

@@ -1,0 +1,68 @@
+From 32c43e253b7f2014a73588dc3e3c01964dcf8f2b Mon Sep 17 00:00:00 2001
+From: jchaloup <jchaloup@redhat.com>
+Date: Tue, 18 Mar 2014 10:40:37 +0100
+Subject: [PATCH] template is not properly duplicated
+
+---
+ src/config.c | 38 ++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 36 insertions(+), 2 deletions(-)
+
+diff --git a/src/config.c b/src/config.c
+index d54fc8a..24ed8e4 100644
+--- a/src/config.c
++++ b/src/config.c
+@@ -1483,7 +1483,24 @@ int cgroup_reload_cached_templates(char *pathname)
+ 	}
+ 
+ 	for (i = 0; i < template_table_index; i++) {
+-		cgroup_copy_cgroup(&config_template_table[i], &template_table[i]);
++		cgroup_copy_cgroup(&template_table[i],
++                        &config_template_table[i]);
++                strcpy((template_table[i]).name,
++                        (config_template_table[i]).name);
++                template_table[i].tasks_uid =
++                        config_template_table[i].tasks_uid;
++                template_table[i].tasks_gid =
++                        config_template_table[i].tasks_gid;
++                template_table[i].task_fperm =
++                        config_template_table[i].task_fperm;
++                template_table[i].control_uid =
++                        config_template_table[i].control_uid;
++                template_table[i].control_gid =
++                        config_template_table[i].control_gid;
++                template_table[i].control_fperm =
++                        config_template_table[i].control_fperm;
++                template_table[i].control_dperm =
++                        config_template_table[i].control_dperm;                
+ 	}
+ 
+ 	return ret;
+@@ -1530,7 +1547,24 @@ int cgroup_init_templates_cache(char *pathname)
+ 	}
+ 
+ 	for (i = 0; i < template_table_index; i++) {
+-		cgroup_copy_cgroup(&config_template_table[i], &template_table[i]);
++		cgroup_copy_cgroup(&template_table[i],
++                        &config_template_table[i]);
++                strcpy((template_table[i]).name,
++                        (config_template_table[i]).name);
++                template_table[i].tasks_uid =
++                        config_template_table[i].tasks_uid;
++                template_table[i].tasks_gid =
++                        config_template_table[i].tasks_gid;
++                template_table[i].task_fperm =
++                        config_template_table[i].task_fperm;
++                template_table[i].control_uid =
++                        config_template_table[i].control_uid;
++                template_table[i].control_gid =
++                        config_template_table[i].control_gid;
++                template_table[i].control_fperm =
++                        config_template_table[i].control_fperm;
++                template_table[i].control_dperm =
++                        config_template_table[i].control_dperm;                
+ 	}
+ 
+ 	return ret;
+-- 
+1.8.5.3
+

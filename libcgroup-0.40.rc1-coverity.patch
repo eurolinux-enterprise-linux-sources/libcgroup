@@ -1,0 +1,151 @@
+diff -upr libcgroup-0.40.rc1.orig/src/api.c libcgroup-0.40.rc1/src/api.c
+--- libcgroup-0.40.rc1.orig/src/api.c	2013-08-27 18:20:40.399333000 +0200
++++ libcgroup-0.40.rc1/src/api.c	2013-08-27 19:34:07.569670729 +0200
+@@ -1003,6 +1003,10 @@ int cgroup_init(void)
+ 
+ 		if (mntopt) {
+ 			mntopt = strtok_r(mntopt, ",", &strtok_buffer);
++			if (!mntopt) {
++				continue;
++			}
++
+ 			/*
+ 			 * Check if it is a duplicate
+ 			 */
+@@ -2719,10 +2723,10 @@ char *cgroup_copy_with_slash(char *input
+ 	int len = strlen(input);
+ 
+ 	/* if input does not end with '/', allocate one more space for it */
+-	if ((input[len-2]) != '/')
++	if ((input[len-1]) != '/')
+ 		len = len+1;
+ 
+-	output = (char *)malloc(sizeof(char)*(len));
++	output = (char *)malloc(sizeof(char)*(len + 1));
+ 	if (output == NULL)
+ 		return NULL;
+ 
+@@ -2796,7 +2800,6 @@ static int cgroup_create_template_group(
+ 	if (group_name == NULL) {
+ 		ret = ECGOTHER;
+ 		last_errno = errno;
+-		free(template_name);
+ 		goto end;
+ 	}
+ 
+@@ -3318,7 +3321,7 @@ int cgroup_get_current_controller_path(p
+ 		}
+ 
+ 		token = strtok_r(controllers, ",", &savedptr);
+-		do {
++		while (token) {
+ 			if (strncmp(controller, token, strlen(controller) + 1)
+ 								== 0) {
+ 				*current_path = strdup(cgroup_path);
+@@ -3331,7 +3334,7 @@ int cgroup_get_current_controller_path(p
+ 				goto done;
+ 			}
+ 			token = strtok_r(NULL, ",", &savedptr);
+-		} while (token);
++		}
+ 	}
+ 
+ done:
+diff -upr libcgroup-0.40.rc1.orig/src/config.c libcgroup-0.40.rc1/src/config.c
+--- libcgroup-0.40.rc1.orig/src/config.c	2013-05-21 15:36:04.000000000 +0200
++++ libcgroup-0.40.rc1/src/config.c	2013-08-27 19:31:54.193828164 +0200
+@@ -313,7 +313,7 @@ int config_group_task_perm(char *perm_ty
+ 	long val = atoi(value);
+ 	char buffer[CGROUP_BUFFER_LEN];
+ 	struct cgroup *config_cgroup;
+-	int table_index;
++	int table_index, ret;
+ 
+ 	switch (flag) {
+ 	case CGROUP:
+@@ -357,10 +357,10 @@ int config_group_task_perm(char *perm_ty
+ 			if (!group)
+ 				goto group_task_error;
+ 
+-			getgrnam_r(value, group, buffer,
++			ret = getgrnam_r(value, group, buffer,
+ 					CGROUP_BUFFER_LEN, &group_buffer);
+ 
+-			if (group_buffer == NULL) {
++			if (ret != 0 || group_buffer == NULL) {
+ 				free(group);
+ 				goto group_task_error;
+ 			}
+@@ -426,7 +426,7 @@ int config_group_admin_perm(char *perm_t
+ 	struct cgroup *config_cgroup;
+ 	long val = atoi(value);
+ 	char buffer[CGROUP_BUFFER_LEN];
+-	int table_index;
++	int table_index, ret;
+ 
+ 	switch (flag) {
+ 	case CGROUP:
+@@ -469,10 +469,10 @@ int config_group_admin_perm(char *perm_t
+ 			if (!group)
+ 				goto admin_error;
+ 
+-			getgrnam_r(value, group, buffer,
++			ret = getgrnam_r(value, group, buffer,
+ 					CGROUP_BUFFER_LEN, &group_buffer);
+ 
+-			if (group_buffer == NULL) {
++			if (ret != 0 || group_buffer == NULL) {
+ 				free(group);
+ 				goto admin_error;
+ 			}
+@@ -1576,14 +1576,14 @@ int cgroup_config_create_template_group(
+ 				/* name and controller match template found */
+ 				/* variables substituted in template */
+ 				strncpy(buffer, t_cgroup->name,
+-					FILENAME_MAX);
++					FILENAME_MAX - 1);
+ 				strncpy(t_cgroup->name, cgroup->name,
+-					FILENAME_MAX);
++					FILENAME_MAX - 1);
+ 
+ 				ret = cgroup_create_cgroup(t_cgroup, flags);
+ 
+ 				strncpy(t_cgroup->name, buffer,
+-					FILENAME_MAX);
++					FILENAME_MAX - 1);
+ 				if (ret) {
+ 					cgroup_dbg("creating group %s, error %d\n",
+ 					cgroup->name, ret);
+@@ -1600,7 +1600,7 @@ int cgroup_config_create_template_group(
+ 		/* no template is present for given name x controller pair
+ 		 * add controller to result cgroup */
+ 		aux_cgroup = cgroup_new_cgroup(cgroup->name);
+-		if (ret) {
++		if (!aux_cgroup) {
+ 			ret = ECGINVAL;
+ 			fprintf(stderr, "cgroup %s can't be created\n",
+ 				cgroup->name);
+diff -upr libcgroup-0.40.rc1.orig/src/daemon/cgrulesengd.c libcgroup-0.40.rc1/src/daemon/cgrulesengd.c
+--- libcgroup-0.40.rc1.orig/src/daemon/cgrulesengd.c	2013-05-21 15:36:04.000000000 +0200
++++ libcgroup-0.40.rc1/src/daemon/cgrulesengd.c	2013-08-27 18:56:41.000674181 +0200
+@@ -646,7 +646,7 @@ close:
+ 
+ static int cgre_create_netlink_socket_process_msg(void)
+ {
+-	int sk_nl = 0, sk_unix = 0, sk_max;
++	int sk_nl = -1, sk_unix = -1, sk_max;
+ 	struct sockaddr_nl my_nla;
+ 	char buff[BUFF_SIZE];
+ 	int rc = -1;
+@@ -784,9 +784,9 @@ static int cgre_create_netlink_socket_pr
+ 	}
+ 
+ close_and_exit:
+-	if (sk_nl > 0)
++	if (sk_nl > -1)
+ 		close(sk_nl);
+-	if (sk_unix > 0)
++	if (sk_unix > -1)
+ 		close(sk_unix);
+ 	return rc;
+ }

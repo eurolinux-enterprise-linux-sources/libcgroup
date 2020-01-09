@@ -1,0 +1,51 @@
+diff -upr libcgroup-0.40.rc1.orig/src/api.c libcgroup-0.40.rc1/src/api.c
+--- libcgroup-0.40.rc1.orig/src/api.c	2013-09-26 17:48:57.997535000 +0200
++++ libcgroup-0.40.rc1/src/api.c	2013-09-27 13:36:41.617642596 +0200
+@@ -2948,11 +2948,11 @@ int cgroup_change_cgroup_flags(uid_t uid
+ 				available = FILENAME_MAX - j - 2;
+ 				/* Substitution */
+ 				switch(tmp->destination[++i]) {
+-				case 'u':
++				case 'U':
+ 					written = snprintf(newdest+j, available,
+ 						"%d", uid);
+ 					break;
+-				case 'U':
++				case 'u':
+ 					user_info = getpwuid(uid);
+ 					if(user_info) {
+ 						written = snprintf(newdest + j,
+@@ -2963,11 +2963,11 @@ int cgroup_change_cgroup_flags(uid_t uid
+ 							available, "%d", uid);
+ 					}
+ 					break;
+-				case 'g':
++				case 'G':
+ 					written = snprintf(newdest + j,
+ 						available, "%d", gid);
+ 					break;
+-				case 'G':
++				case 'g':
+ 					group_info = getgrgid(gid);
+ 					if(group_info) {
+ 						written = snprintf(newdest + j,
+@@ -2978,15 +2978,15 @@ int cgroup_change_cgroup_flags(uid_t uid
+ 							available, "%d", gid);
+ 					}
+ 					break;
+-				case 'p':
++				case 'P':
+ 					written = snprintf(newdest + j,
+ 						available, "%d", pid);
+ 					break;
+-				case 'P':
+-					if(procname) {
++				case 'p':
++					if(procname && strlen(basename(procname))) {
+ 						written = snprintf(newdest + j,
+ 							available, "%s",
+-							procname);
++							basename(procname));
+ 					} else {
+ 						written = snprintf(newdest + j,
+ 							available, "%d", pid);

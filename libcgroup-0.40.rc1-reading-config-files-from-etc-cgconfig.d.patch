@@ -1,0 +1,594 @@
+From 9d726c6280208880f102057ab2e56fb1af4f5497 Mon Sep 17 00:00:00 2001
+From: Jan Chaloupka <jchaloup@redhat.com>
+Date: Tue, 6 Jan 2015 15:47:01 +0100
+Subject: [PATCH] libcgroup-0.40.rc1-reading-config-files-from-etc-cgc
+
+---
+ doc/man/cgconfig.conf.5    |  12 ++-
+ doc/man/cgrulesengd.8      |   8 +-
+ include/libcgroup/config.h |  21 ++++++
+ scripts/init.d/cgconfig.in |   5 +-
+ src/config.c               | 177 ++++++++++++++++++++++++++++++++++++++++++++-
+ src/daemon/Makefile.am     |   4 +-
+ src/daemon/Makefile.in     |  25 ++++++-
+ src/daemon/cgrulesengd.c   |  51 +++++++++++--
+ src/libcgroup-internal.h   |   3 +
+ src/libcgroup.map          |   5 ++
+ src/tools/tools-common.h   |   2 +-
+ 11 files changed, 292 insertions(+), 21 deletions(-)
+
+diff --git a/doc/man/cgconfig.conf.5 b/doc/man/cgconfig.conf.5
+index be80e4e..79afcd6 100644
+--- a/doc/man/cgconfig.conf.5
++++ b/doc/man/cgconfig.conf.5
+@@ -251,6 +251,9 @@ Templates does not use
+ .B default
+ section settings.
+ 
++.I /etc/cgconfig.d/
++directory can be used for additional configuration files. cgrulesengd searches this directory for additional templates.
++
+ .\"********************************************"
+ .SH EXAMPLES
+ .LP
+@@ -783,10 +786,15 @@ related to them.
+ .SH FILES
+ .LP
+ .PD .1v
+-.TP 20
+-.B /etc/cgconfig.conf
+ .TP
++.B /etc/cgconfig.conf
++.RS 4
+ default libcgroup configuration file
++.RE
++.B /etc/cgconfig.d/
++.RS 4
++default libcgroup configuration files directory
++.RE
+ .PD 
+ 
+ .SH SEE ALSO
+diff --git a/doc/man/cgrulesengd.8 b/doc/man/cgrulesengd.8
+index 2e89c5b..749b6fc 100644
+--- a/doc/man/cgrulesengd.8
++++ b/doc/man/cgrulesengd.8
+@@ -65,10 +65,16 @@ controls verbosity of the tool. Allowed values are \fBDEBUG\fR,
+ .SH FILES
+ .LP
+ .PD .1v
+-.TP 20
++.TP
+ .B /etc/cgrules.conf
+ .TP
+ the default libcgroup configuration file
++.TP
++.B /etc/cgconfig.conf
++the default templates file
++.TP
++.B /etc/cgconfig.d/
++the default templates directory
+ 
+ .SH SEE ALSO
+ cgrules.conf (5)
+diff --git a/include/libcgroup/config.h b/include/libcgroup/config.h
+index 43568e1..9972e64 100644
+--- a/include/libcgroup/config.h
++++ b/include/libcgroup/config.h
+@@ -84,11 +84,32 @@ int cgroup_init_templates_cache(char *pathname);
+ int cgroup_reload_cached_templates(char *pathname);
+ 
+ /**
++ * Load the templates cache from files. Before calling this function,
++ * cgroup_templates_cache_set_source_files has to be called first.
++ * @param file_index index of file which was unable to be parsed
++ * @return 0 on success, > 0 on error
++ */
++int cgroup_load_templates_cache_from_files(int *file_index);
++
++/**
++ * Setting source files of templates. This function has to be called before
++ * any call of cgroup_load_templates_cache_from_files.
++ * @param tmpl_files
++ */
++struct cgroup_string_list;
++void cgroup_templates_cache_set_source_files(
++	struct cgroup_string_list *tmpl_files);
++
++/**
+  * Physically create a new control group in kernel, based on given control
+  * group template and configuration file. If given template is not set in
+  * configuration file, then the procedure works create the control group
+  * using  cgroup_create_cgroup() function
+  *
++ * Templates are loaded using cgroup_[init|reload]_templates_cache_from_files
++ * function, which must be preceded by cgroup_templates_cache_set_source_files
++ * call.
++ *
+  * The flags can alter the behavior of this function:
+  * CGFLAG_USE_TEMPLATE_CACHE: Use cached templates instead of
+  * parsing the config file
+diff --git a/scripts/init.d/cgconfig.in b/scripts/init.d/cgconfig.in
+index b884698..734f90a 100644
+--- a/scripts/init.d/cgconfig.in
++++ b/scripts/init.d/cgconfig.in
+@@ -33,6 +33,7 @@
+ prefix=@prefix@;exec_prefix=@exec_prefix@;sbindir=@sbindir@
+ CGCONFIGPARSER_BIN=$sbindir/cgconfigparser
+ CONFIG_FILE=/etc/cgconfig.conf
++CONFIG_DIR=/etc/cgconfig.d
+ servicename=cgconfig
+ lockfile=/var/lock/subsys/$servicename
+ 
+@@ -117,10 +118,10 @@ start() {
+                     return 6
+                 fi
+ 
+-                $CGCONFIGPARSER_BIN -l $CONFIG_FILE
++                $CGCONFIGPARSER_BIN -l $CONFIG_FILE -L $CONFIG_DIR
+                 retval=$?
+                 if [ $retval -ne 0 ]; then
+-                    log_failure_msg "Failed to parse " $CONFIG_FILE
++                    log_failure_msg "Failed to parse " $CONFIG_FILE " or " $CONFIG_DIR
+                     return 1
+                 fi
+         fi
+diff --git a/src/config.c b/src/config.c
+index 24ed8e4..25ea214 100644
+--- a/src/config.c
++++ b/src/config.c
+@@ -41,6 +41,8 @@
+ #include <sys/stat.h>
+ #include <sys/types.h>
+ 
++#include "tools/tools-common.h"
++
+ unsigned int MAX_CGROUPS = 64;	/* NOTE: This value changes dynamically */
+ unsigned int MAX_TEMPLATES = 64;
+ 				/* NOTE: This value changes dynamically */
+@@ -89,6 +91,7 @@ static int config_template_table_index;
+  */
+ static struct cgroup *template_table;
+ static int template_table_index;
++static struct cgroup_string_list *template_files;
+ 
+ 
+ /*
+@@ -96,6 +99,9 @@ static int template_table_index;
+  */
+ #define CGROUP_FILESYSTEM "cgroup"
+ 
++#define TEMPLATE_ACTION_INIT 0
++#define TEMPLATE_ACTION_RELOAD 1
++
+ /*
+  * NOTE: All these functions return 1 on success
+  * and not 0 as is the library convention
+@@ -1572,6 +1578,168 @@ int cgroup_init_templates_cache(char *pathname)
+ 
+ }
+ 
++/**
++ * Setting source files of templates. This function has to be called before
++ * any call of cgroup_load_templates_cache_from_files.
++ * @param tmpl_files
++ */
++void cgroup_templates_cache_set_source_files(
++	struct cgroup_string_list *tmpl_files)
++{
++	template_files = tmpl_files;
++}
++
++/**
++ * Appending cgroup templates parsed by parser to template_table
++ * @param offset number of templates already in the table
++ */
++int cgroup_add_cgroup_templates(int offset)
++{
++	int i, ti, ret;
++
++	for (i = 0; i < config_template_table_index; i++) {
++		ti = i + offset;
++		ret = cgroup_copy_cgroup(&template_table[ti],
++			&config_template_table[i]);
++		if (ret)
++			return ret;
++
++		strcpy((template_table[ti]).name,
++			(config_template_table[i]).name);
++		template_table[ti].tasks_uid =
++			config_template_table[i].tasks_uid;
++		template_table[ti].tasks_gid =
++			config_template_table[i].tasks_gid;
++		template_table[ti].task_fperm =
++			config_template_table[i].task_fperm;
++		template_table[ti].control_uid =
++			config_template_table[i].control_uid;
++		template_table[ti].control_gid =
++			config_template_table[i].control_gid;
++		template_table[ti].control_fperm =
++			config_template_table[i].control_fperm;
++		template_table[ti].control_dperm =
++			config_template_table[i].control_dperm;
++	}
++
++	return 0;
++}
++
++/**
++ * Expand template table based on new number of parsed templates, i.e.
++ * on value of config_template_table_index.
++ * Change value of template_table_index.
++ * @return 0 on success, < 0 on error
++ */
++int cgroup_expand_template_table(void)
++{
++	int i;
++
++	template_table = realloc(template_table,
++		(template_table_index + config_template_table_index)
++		*sizeof(struct cgroup));
++
++	if (template_table == NULL)
++		return -ECGOTHER;
++
++	for (i = 0; i < config_template_table_index; i++)
++		template_table[i + template_table_index].index = 0;
++
++	template_table_index += config_template_table_index;
++
++	return 0;
++}
++
++/**
++ * Load the templates cache from files. Before calling this function,
++ * cgroup_templates_cache_set_source_files has to be called first.
++ * @param file_index index of file which was unable to be parsed
++ * @return 0 on success, > 0 on error
++ */
++int cgroup_load_templates_cache_from_files(int *file_index)
++{
++	int ret;
++	int i, j;
++	int template_table_last_index;
++	char *pathname;
++
++	if (!template_files) {
++		/* source files has not been set */
++		cgroup_dbg("Template source files have not been set\n");
++		ret = ECGOTHER;
++		*file_index = -1;
++		return ret;
++	}
++
++	/* Back compatibility with old cgroup copy function */
++	if (template_files->count == 1 &&
++		strcmp(template_files->items[0], CGCONFIG_CONF_FILE) == 0) {
++
++		if (template_table_index == 0)
++			/* the rules cache is empty */
++			return cgroup_init_templates_cache(
++				CGCONFIG_CONF_FILE);
++		else
++			/* cache is not empty */
++			return cgroup_reload_cached_templates(
++				CGCONFIG_CONF_FILE);
++	}
++
++	if (template_table) {
++		/* template structures have to be free */
++		for (i = 0; i < template_table_index; i++)
++			cgroup_free_controllers(&template_table[i]);
++		free(template_table);
++		template_table = NULL;
++	}
++	template_table_index = 0;
++
++	if ((config_template_table_index != 0) || (config_table_index != 0)) {
++		/* config structures have to be clean before parsing */
++		cgroup_free_config();
++	}
++
++	for (j = 0; j < template_files->count; j++) {
++		pathname = template_files->items[j];
++
++		cgroup_dbg("Parsing templates from %s.\n", pathname);
++		/* Attempt to read the configuration file
++		 * and cache the rules. */
++		ret = cgroup_parse_config(pathname);
++		if (ret) {
++			cgroup_dbg("Could not initialize rule cache, ");
++			cgroup_dbg("error was: %d\n", ret);
++			*file_index = j;
++			return ret;
++		}
++
++		if (config_template_table_index > 0) {
++			template_table_last_index = template_table_index;
++			ret = cgroup_expand_template_table();
++			if (ret) {
++				cgroup_dbg("Could not expand template table, ");
++				cgroup_dbg("error was: %d\n", -ret);
++				*file_index = j;
++				return -ret;
++			}
++
++			/* copy template data to templates cache structures */
++			cgroup_dbg("Copying templates to template table ");
++			cgroup_dbg("from %s.\n", pathname);
++			ret = cgroup_add_cgroup_templates(
++				template_table_last_index);
++			if (ret) {
++				cgroup_dbg("Unable to copy cgroup\n");
++				*file_index = j;
++				return ret;
++			}
++			cgroup_dbg("Templates to template table copied\n");
++		}
++	}
++
++	return 0;
++}
++
+ /*
+  * Create a given cgroup, based on template configuration if it is present
+  * if the template is not present cgroup is creted using cgroup_create_cgroup
+@@ -1592,13 +1760,16 @@ int cgroup_config_create_template_group(struct cgroup *cgroup,
+ 	 * use CGCONFIG_CONF_FILE by default
+ 	 */
+ 	if (!(flags & CGFLAG_USE_TEMPLATE_CACHE)) {
++		int fileindex;
+ 		if (template_table_index == 0)
+ 			/* the rules cache is empty */
+-			ret = cgroup_init_templates_cache(CGCONFIG_CONF_FILE);
++			ret = cgroup_load_templates_cache_from_files(
++				&fileindex);
++
+ 		else
+ 			/* cache is not empty */
+-			ret = cgroup_reload_cached_templates(
+-				CGCONFIG_CONF_FILE);
++			ret = cgroup_load_templates_cache_from_files(
++				&fileindex);
+ 		if (ret != 0) {
+ 			cgroup_dbg("Failed initialize templates cache.\n");
+ 			return ret;
+diff --git a/src/daemon/Makefile.am b/src/daemon/Makefile.am
+index f3100ed..abbbe30 100644
+--- a/src/daemon/Makefile.am
++++ b/src/daemon/Makefile.am
+@@ -1,9 +1,9 @@
+-INCLUDES = -I $(top_srcdir)/include
++INCLUDES = -I$(top_srcdir)/src -I$(top_srcdir)/include
+ 
+ if WITH_DAEMON
+ 
+ sbin_PROGRAMS = cgrulesengd
+-cgrulesengd_SOURCES = cgrulesengd.c cgrulesengd.h
++cgrulesengd_SOURCES = cgrulesengd.c cgrulesengd.h ../tools/tools-common.h ../tools/tools-common.c
+ cgrulesengd_LDADD = $(top_builddir)/src/.libs/libcgroup.la -lrt
+ cgrulesengd_LDFLAGS = -L$(top_builddir)/src/.libs
+ 
+diff --git a/src/daemon/Makefile.in b/src/daemon/Makefile.in
+index 1a865b9..af25cd0 100644
+--- a/src/daemon/Makefile.in
++++ b/src/daemon/Makefile.in
+@@ -64,8 +64,10 @@ CONFIG_CLEAN_FILES =
+ CONFIG_CLEAN_VPATH_FILES =
+ am__installdirs = "$(DESTDIR)$(sbindir)"
+ PROGRAMS = $(sbin_PROGRAMS)
+-am__cgrulesengd_SOURCES_DIST = cgrulesengd.c cgrulesengd.h
+-@WITH_DAEMON_TRUE@am_cgrulesengd_OBJECTS = cgrulesengd.$(OBJEXT)
++am__cgrulesengd_SOURCES_DIST = cgrulesengd.c cgrulesengd.h \
++	../tools/tools-common.h ../tools/tools-common.c
++@WITH_DAEMON_TRUE@am_cgrulesengd_OBJECTS = cgrulesengd.$(OBJEXT) \
++@WITH_DAEMON_TRUE@	tools-common.$(OBJEXT)
+ cgrulesengd_OBJECTS = $(am_cgrulesengd_OBJECTS)
+ @WITH_DAEMON_TRUE@cgrulesengd_DEPENDENCIES =  \
+ @WITH_DAEMON_TRUE@	$(top_builddir)/src/.libs/libcgroup.la
+@@ -249,8 +251,8 @@ target_alias = @target_alias@
+ top_build_prefix = @top_build_prefix@
+ top_builddir = @top_builddir@
+ top_srcdir = @top_srcdir@
+-INCLUDES = -I $(top_srcdir)/include
+-@WITH_DAEMON_TRUE@cgrulesengd_SOURCES = cgrulesengd.c cgrulesengd.h
++INCLUDES = -I$(top_srcdir)/src -I$(top_srcdir)/include
++@WITH_DAEMON_TRUE@cgrulesengd_SOURCES = cgrulesengd.c cgrulesengd.h ../tools/tools-common.h ../tools/tools-common.c
+ @WITH_DAEMON_TRUE@cgrulesengd_LDADD = $(top_builddir)/src/.libs/libcgroup.la -lrt
+ @WITH_DAEMON_TRUE@cgrulesengd_LDFLAGS = -L$(top_builddir)/src/.libs
+ all: all-am
+@@ -344,6 +346,7 @@ distclean-compile:
+ 	-rm -f *.tab.c
+ 
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cgrulesengd.Po@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tools-common.Po@am__quote@
+ 
+ .c.o:
+ @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
+@@ -366,6 +369,20 @@ distclean-compile:
+ @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+ @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LTCOMPILE) -c -o $@ $<
+ 
++tools-common.o: ../tools/tools-common.c
++@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT tools-common.o -MD -MP -MF $(DEPDIR)/tools-common.Tpo -c -o tools-common.o `test -f '../tools/tools-common.c' || echo '$(srcdir)/'`../tools/tools-common.c
++@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/tools-common.Tpo $(DEPDIR)/tools-common.Po
++@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='../tools/tools-common.c' object='tools-common.o' libtool=no @AMDEPBACKSLASH@
++@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
++@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o tools-common.o `test -f '../tools/tools-common.c' || echo '$(srcdir)/'`../tools/tools-common.c
++
++tools-common.obj: ../tools/tools-common.c
++@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT tools-common.obj -MD -MP -MF $(DEPDIR)/tools-common.Tpo -c -o tools-common.obj `if test -f '../tools/tools-common.c'; then $(CYGPATH_W) '../tools/tools-common.c'; else $(CYGPATH_W) '$(srcdir)/../tools/tools-common.c'; fi`
++@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/tools-common.Tpo $(DEPDIR)/tools-common.Po
++@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='../tools/tools-common.c' object='tools-common.obj' libtool=no @AMDEPBACKSLASH@
++@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
++@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o tools-common.obj `if test -f '../tools/tools-common.c'; then $(CYGPATH_W) '../tools/tools-common.c'; else $(CYGPATH_W) '$(srcdir)/../tools/tools-common.c'; fi`
++
+ mostlyclean-libtool:
+ 	-rm -f *.lo
+ 
+diff --git a/src/daemon/cgrulesengd.c b/src/daemon/cgrulesengd.c
+index 170837a..d959eff 100644
+--- a/src/daemon/cgrulesengd.c
++++ b/src/daemon/cgrulesengd.c
+@@ -34,6 +34,7 @@
+ #include "libcgroup.h"
+ #include "cgrulesengd.h"
+ #include "../libcgroup-internal.h"
++#include "../tools/tools-common.h"
+ 
+ #include <errno.h>
+ #include <stdarg.h>
+@@ -59,6 +60,9 @@
+ 
+ #define NUM_PER_REALLOCATIOM	(100)
+ 
++/* list of config files from CGCONFIG_CONF_FILE and CGCONFIG_CONF_DIR */
++static struct cgroup_string_list template_files;
++
+ /* Log file, NULL if logging to file is disabled */
+ FILE* logfile;
+ 
+@@ -936,6 +940,8 @@ void cgre_flash_rules(int signum)
+ 	/* Current time */
+ 	time_t tm = time(0);
+ 
++	int fileindex;
++
+ 	flog(LOG_INFO, "Reloading rules configuration\n");
+ 	flog(LOG_DEBUG, "Current time: %s\n", ctime(&tm));
+ 
+@@ -949,7 +955,7 @@ void cgre_flash_rules(int signum)
+ 	}
+ 
+ 	/* Ask libcgroup to reload the template rules table. */
+-	cgroup_reload_cached_templates(CGCONFIG_CONF_FILE);
++	cgroup_load_templates_cache_from_files(&fileindex);
+ }
+ 
+ /**
+@@ -962,11 +968,13 @@ void cgre_flash_templates(int signum)
+ 	/* Current time */
+ 	time_t tm = time(0);
+ 
++	int fileindex;
++
+ 	flog(LOG_INFO, "Reloading templates configuration.\n");
+ 	flog(LOG_DEBUG, "Current time: %s\n", ctime(&tm));
+ 
+ 	/* Ask libcgroup to reload the templates table. */
+-	cgroup_reload_cached_templates(CGCONFIG_CONF_FILE);
++	cgroup_load_templates_cache_from_files(&fileindex);
+ }
+ 
+ /**
+@@ -1069,6 +1077,8 @@ int main(int argc, char *argv[])
+ 		{NULL, 0, NULL, 0}
+ 	};
+ 
++	int fileindex;
++
+ 	/* Make sure the user is root. */
+ 	if (getuid() != 0) {
+ 		fprintf(stderr, "Error: Only root can start/stop the control"
+@@ -1180,6 +1190,25 @@ int main(int argc, char *argv[])
+ 	}
+ 
+ 	/* Ask libcgroup to load the configuration rules. */
++	ret = cgroup_string_list_init(&template_files,
++		CGCONFIG_CONF_FILES_LIST_MINIMUM_SIZE);
++	if (ret) {
++		fprintf(stderr, "%s: cannot init file list, out of memory?\n",
++			argv[0]);
++		goto finished_without_temp_files;
++	}
++	/* first add CGCONFIG_CONF_FILE into file list */
++	ret = cgroup_string_list_add_item(&template_files, CGCONFIG_CONF_FILE);
++	if (ret) {
++		fprintf(stderr, "%s: cannot add file to list, out of memory?\n"
++			, argv[0]);
++		goto finished;
++	}
++
++	/* then read CGCONFIG_CONF_DIR directory for additional config files */
++	cgroup_string_list_add_directory(&template_files, CGCONFIG_CONF_DIR,
++		argv[0]);
++
+ 	if ((ret = cgroup_init_rules_cache()) != 0) {
+ 		fprintf(stderr, "Error: libcgroup failed to initialize rules"
+ 				"cache from %s. %s\n", CGRULES_CONF_FILE,
+@@ -1188,11 +1217,18 @@ int main(int argc, char *argv[])
+ 	}
+ 
+ 	/* ask libcgroup to load template rules as well */
+-	ret = cgroup_init_templates_cache(CGCONFIG_CONF_FILE);
++	cgroup_templates_cache_set_source_files(&template_files);
++	ret = cgroup_load_templates_cache_from_files(&fileindex);
+ 	if (ret != 0) {
+-		fprintf(stderr, "Error: libcgroup failed to initialize teplate"\
+-				"rules from %s. %s\n", CGCONFIG_CONF_FILE,
+-				cgroup_strerror(ret));
++		if (fileindex < 0) {
++			fprintf(stderr, "Error: Template source files ");
++			fprintf(stderr, "have not been set\n");
++		} else {
++			fprintf(stderr, "Error: Failed to initialize template");
++			fprintf(stderr, "rules from %s. ",
++				template_files.items[fileindex]);
++			fprintf(stderr, "%s\n", cgroup_strerror(-ret));
++		}
+ 		goto finished;
+ 	}
+ 
+@@ -1259,6 +1295,9 @@ int main(int argc, char *argv[])
+ 	ret =  cgre_create_netlink_socket_process_msg();
+ 
+ finished:
++	cgroup_string_list_free(&template_files);
++
++finished_without_temp_files:
+ 	if (logfile && logfile != stdout)
+ 		fclose(logfile);
+ 
+diff --git a/src/libcgroup-internal.h b/src/libcgroup-internal.h
+index 4c0f46c..c128788 100644
+--- a/src/libcgroup-internal.h
++++ b/src/libcgroup-internal.h
+@@ -48,6 +48,9 @@ __BEGIN_DECLS
+ 
+ 
+ #define CGCONFIG_CONF_FILE		"/etc/cgconfig.conf"
++/* Minimum number of file in template file list for cgrulesengd */
++#define CGCONFIG_CONF_FILES_LIST_MINIMUM_SIZE   4
++#define CGCONFIG_CONF_DIR               "/etc/cgconfig.d"
+ 
+ #define CGRULES_CONF_FILE       "/etc/cgrules.conf"
+ #define CGRULES_MAX_FIELDS_PER_LINE		3
+diff --git a/src/libcgroup.map b/src/libcgroup.map
+index b0c162c..f8b0fb9 100644
+--- a/src/libcgroup.map
++++ b/src/libcgroup.map
+@@ -117,3 +117,8 @@ CGROUP_0.39 {
+ 	cgroup_log;
+ 	cgroup_parse_log_level_str;
+ } CGROUP_0.38;
++
++CGROUP_0.40 {
++	cgroup_templates_cache_set_source_files;
++	cgroup_load_templates_cache_from_files;
++} CGROUP_0.39;
+diff --git a/src/tools/tools-common.h b/src/tools/tools-common.h
+index e05465f..c723eb4 100644
+--- a/src/tools/tools-common.h
++++ b/src/tools/tools-common.h
+@@ -20,7 +20,7 @@
+ 
+ #include "config.h"
+ #include <libcgroup.h>
+-#include <libcgroup-internal.h>
++#include "../libcgroup-internal.h"
+ 
+ #define cgroup_err(x...) cgroup_log(CGROUP_LOG_ERROR, x)
+ #define cgroup_warn(x...) cgroup_log(CGROUP_LOG_WARNING, x)
+-- 
+1.9.3
+

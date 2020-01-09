@@ -1,0 +1,41 @@
+diff -up libcgroup-0.40.rc1/scripts/init.d/cgconfig.in.lsb libcgroup-0.40.rc1/scripts/init.d/cgconfig.in
+--- libcgroup-0.40.rc1/scripts/init.d/cgconfig.in.lsb	2013-05-21 15:36:04.000000000 +0200
++++ libcgroup-0.40.rc1/scripts/init.d/cgconfig.in	2013-08-26 13:53:00.104167568 +0200
+@@ -39,7 +39,16 @@ lockfile=/var/lock/subsys/$servicename
+ #
+ # Source LSB routines
+ #
+-. /lib/lsb/init-functions
++. /etc/rc.d/init.d/functions
++log_success_msg () {
++    echo -n $*; success "$*"; echo
++}
++log_failure_msg () {
++    echo -n $*; failure "$*"; echo
++}
++log_warning_msg () {
++    echo -n $*; warning "$*"; echo
++}
+ 
+ # read the config
+ CREATE_DEFAULT=yes
+diff -up libcgroup-0.40.rc1/scripts/init.d/cgred.in.lsb libcgroup-0.40.rc1/scripts/init.d/cgred.in
+--- libcgroup-0.40.rc1/scripts/init.d/cgred.in.lsb	2013-05-21 15:36:04.000000000 +0200
++++ libcgroup-0.40.rc1/scripts/init.d/cgred.in	2013-08-26 13:53:00.104167568 +0200
+@@ -41,7 +41,15 @@ CGRED_CONF=/etc/cgrules.conf
+ 
+ # Source function library & LSB routines
+ . /etc/rc.d/init.d/functions
+-. /lib/lsb/init-functions
++log_success_msg () {
++    echo -n $*; success "$*"; echo
++}
++log_failure_msg () {
++    echo -n $*; failure "$*"; echo
++}
++log_warning_msg () {
++    echo -n $*; warning "$*"; echo
++}
+ 
+ # Read in configuration options.
+ if [ -f "/etc/sysconfig/cgred.conf" ] ; then
