@@ -5,7 +5,7 @@ Name: libcgroup
 Summary: Tools and libraries to control and monitor control groups
 Group: Development/Libraries
 Version: 0.40.rc1
-Release: 26%{?dist}
+Release: 27%{?dist}
 License: LGPLv2+
 URL: http://libcg.sourceforge.net/
 Source0: http://downloads.sourceforge.net/libcg/%{name}-%{version}.tar.bz2
@@ -210,6 +210,10 @@ fi
 %doc COPYING INSTALL 
 
 %changelog
+* Thu Jun 21 2018 Nikola Forró <nforro@redhat.com> - 0.40.rc1-27
+- always move all tasks of a process to a cgroup
+  resolves: #1593299
+
 * Tue Nov 28 2017 Nikola Forró <nforro@redhat.com> - 0.40.rc1-26
 - fix potentially unterminated string
   related: #1441163
