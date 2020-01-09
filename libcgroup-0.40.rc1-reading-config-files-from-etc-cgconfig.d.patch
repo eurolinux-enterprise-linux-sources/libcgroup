@@ -1,6 +1,6 @@
-From 28161ba9559f309c6190e5c5f1ed8d40a4b7032a Mon Sep 17 00:00:00 2001
+From a6bbad2768c3dbebdefd12d21053ed855f5dec0d Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Nikola=20Forr=C3=B3?= <nforro@redhat.com>
-Date: Wed, 10 Aug 2016 18:18:04 +0200
+Date: Mon, 6 Feb 2017 13:06:51 +0100
 Subject: [PATCH] libcgroup-0.40.rc1-reading-config-files-from-etc-cgc
 
 ---
@@ -14,9 +14,9 @@ Subject: [PATCH] libcgroup-0.40.rc1-reading-config-files-from-etc-cgc
  src/daemon/cgrulesengd.c   |  28 +++--
  src/libcgroup-internal.h   |   3 +
  src/libcgroup.map          |   7 ++
- src/pam/pam_cgroup.c       |  14 +++
+ src/pam/pam_cgroup.c       |  18 ++++
  src/tools/tools-common.h   |   2 +-
- 12 files changed, 365 insertions(+), 22 deletions(-)
+ 12 files changed, 369 insertions(+), 22 deletions(-)
 
 diff --git a/doc/man/cgconfig.conf.5 b/doc/man/cgconfig.conf.5
 index be80e4e..79afcd6 100644
@@ -129,7 +129,7 @@ index 43568e1..eadf723 100644
   * @}
   */
 diff --git a/scripts/init.d/cgconfig.in b/scripts/init.d/cgconfig.in
-index b884698..734f90a 100644
+index ec89454..9c1c617 100644
 --- a/scripts/init.d/cgconfig.in
 +++ b/scripts/init.d/cgconfig.in
 @@ -33,6 +33,7 @@
@@ -641,20 +641,24 @@ index b0c162c..e114c13 100644
 +	cgroup_free_template_files;
 +} CGROUP_0.39;
 diff --git a/src/pam/pam_cgroup.c b/src/pam/pam_cgroup.c
-index aa0bd62..58619d6 100644
+index aa0bd62..10021e4 100644
 --- a/src/pam/pam_cgroup.c
 +++ b/src/pam/pam_cgroup.c
-@@ -75,6 +75,9 @@
+@@ -75,6 +75,13 @@
  
  #define PAM_DEBUG_ARG       0x0001
  
++/* program name for log messages */
++
++#define PROGRAM_NAME        "pam_cgroup.so"
++
 +/* list of config files from CGCONFIG_CONF_FILE and CGCONFIG_CONF_DIR */
 +static struct cgroup_string_list *template_files = NULL;
 +
  static int _pam_parse(const pam_handle_t *pamh, int argc, const char **argv)
  {
      int ctrl = 0;
-@@ -98,6 +101,7 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags,
+@@ -98,6 +105,7 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags,
  	int ctrl, ret;
  	char *user_name;
  	struct passwd *pwd;
@@ -662,11 +666,11 @@ index aa0bd62..58619d6 100644
  
  	D(("called."));
  
-@@ -129,6 +133,14 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags,
+@@ -129,6 +137,14 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags,
  		return PAM_SESSION_ERR;
  	}
  
-+	ret = cgroup_init_template_files(&template_files, &fileindex, (char *)argv[0]);
++	ret = cgroup_init_template_files(&template_files, &fileindex, PROGRAM_NAME);
 +	if (ret) {
 +		if (ctrl & PAM_DEBUG_ARG)
 +			pam_syslog(pamh, LOG_ERR, "libcgroup failed to initialize"
@@ -677,7 +681,7 @@ index aa0bd62..58619d6 100644
  	D(("Initialized libcgroup successfuly."));
  
  	/* Determine the pid of the task */
-@@ -142,6 +154,7 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags,
+@@ -142,6 +158,7 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags,
  		if (ctrl & PAM_DEBUG_ARG)
  			pam_syslog(pamh, LOG_ERR, "Change of cgroup for process"
  				" with username %s failed.\n", user_name);
@@ -685,7 +689,7 @@ index aa0bd62..58619d6 100644
  		return PAM_SESSION_ERR;
  	}
  
-@@ -149,6 +162,7 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags,
+@@ -149,6 +166,7 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags,
  		pam_syslog(pamh, LOG_DEBUG, "Changed cgroup for process %d"
  				"  with username %s.\n", pid, user_name);
  

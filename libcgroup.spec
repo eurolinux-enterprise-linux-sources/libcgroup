@@ -5,7 +5,7 @@ Name: libcgroup
 Summary: Tools and libraries to control and monitor control groups
 Group: Development/Libraries
 Version: 0.40.rc1
-Release: 23%{?dist}
+Release: 24%{?dist}
 License: LGPLv2+
 URL: http://libcg.sourceforge.net/
 Source0: http://downloads.sourceforge.net/libcg/%{name}-%{version}.tar.bz2
@@ -208,6 +208,10 @@ fi
 %doc COPYING INSTALL 
 
 %changelog
+* Fri Feb 03 2017 Nikola Forró <nforro@redhat.com> - 0.40.rc1-24
+- fix segfault in cgroup_pam.c
+  resolves: #1419519
+
 * Fri Oct 21 2016 Nikola Forró <nforro@redhat.com> - 0.40.rc1-23
 - fix potential buffer overflow
   resolves: #1386742
