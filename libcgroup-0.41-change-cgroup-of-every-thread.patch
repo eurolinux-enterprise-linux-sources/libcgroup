@@ -1,0 +1,65 @@
+From f6c2147bc9e91e6fc5e1b9c97ccc96c40e81c6a4 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Nikola=20Forr=C3=B3?= <nforro@redhat.com>
+Date: Wed, 9 Dec 2015 11:05:57 +0100
+Subject: [PATCH] api.c: change cgroup of every thread of a process
+
+When changing cgroup of multi-threaded process, only the main threads
+cgroup actually changed. Now all threads of a process are enumerated
+and cgroup is changed for each of them.
+---
+ src/api.c | 28 +++++++++++++++++++++++-----
+ 1 file changed, 23 insertions(+), 5 deletions(-)
+
+diff --git a/src/api.c b/src/api.c
+index 457dc3c..0101c17 100644
+--- a/src/api.c
++++ b/src/api.c
+@@ -3196,10 +3196,13 @@ int cgroup_change_all_cgroups(void)
+ 		return -ECGOTHER;
+ 
+ 	while ((pid_dir = readdir(dir)) != NULL) {
+-		int err, pid;
++		int err, pid, tid;
+ 		uid_t euid;
+ 		gid_t egid;
+ 		char *procname = NULL;
++		DIR *tdir;
++		struct dirent *tid_dir = NULL;
++		char tpath[FILENAME_MAX] = { '\0' };
+ 
+ 		err = sscanf(pid_dir->d_name, "%i", &pid);
+ 		if (err < 1)
+@@ -3213,11 +3216,26 @@ int cgroup_change_all_cgroups(void)
+ 		if (err)
+ 			continue;
+ 
+-		err = cgroup_change_cgroup_flags(euid, egid,
+-				procname, pid, CGFLAG_USECACHE);
+-		if (err)
+-			cgroup_dbg("cgroup change pid %i failed\n", pid);
++		snprintf(tpath, FILENAME_MAX, "%s%d/task/", path, pid);
++
++		tdir = opendir(tpath);
++		if (!tdir) {
++			free(procname);
++			continue;
++		}
++
++		while ((tid_dir = readdir(tdir)) != NULL) {
++			err = sscanf(tid_dir->d_name, "%i", &tid);
++			if (err < 1)
++				continue;
++
++			err = cgroup_change_cgroup_flags(euid, egid,
++					procname, tid, CGFLAG_USECACHE);
++			if (err)
++				cgroup_dbg("cgroup change tid %i failed\n", tid);
++		}
+ 
++		closedir(tdir);
+ 		free(procname);
+ 	}
+ 
+-- 
+2.4.3
+

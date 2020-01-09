@@ -1,0 +1,39 @@
+From 72c42332666ab5fd853b8256a60de1f55312e98d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Nikola=20Forr=C3=B3?= <nforro@redhat.com>
+Date: Thu, 4 Aug 2016 13:58:06 +0200
+Subject: [PATCH] Change priority of cgconfig and cgred init scripts
+
+---
+ scripts/init.d/cgconfig.in | 2 +-
+ scripts/init.d/cgred.in    | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/scripts/init.d/cgconfig.in b/scripts/init.d/cgconfig.in
+index 734f90a..9c1c617 100644
+--- a/scripts/init.d/cgconfig.in
++++ b/scripts/init.d/cgconfig.in
+@@ -14,7 +14,7 @@
+ # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ #
+ # cgconfig Control Groups Configuration Startup
+-# chkconfig: - 5 95
++# chkconfig: - 28 72
+ # description: This script runs the cgconfigparser utility to parse and setup
+ #              the control group filesystem. It uses /etc/cgconfig.conf
+ #              and parses the configuration specified in there.
+diff --git a/scripts/init.d/cgred.in b/scripts/init.d/cgred.in
+index 1d2b5bc..1f73d17 100644
+--- a/scripts/init.d/cgred.in
++++ b/scripts/init.d/cgred.in
+@@ -14,7 +14,7 @@
+ # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ #
+ # cgred		CGroups Rules Engine Daemon
+-# chkconfig:	- 14 86
++# chkconfig:	- 29 71
+ # description:	This is a daemon for automatically classifying processes \
+ #		into cgroups based on UID/GID.
+ #
+-- 
+2.7.4
+
