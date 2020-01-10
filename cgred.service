@@ -1,6 +1,6 @@
 [Unit]
 Description=CGroups Rules Engine Daemon
-After=syslog.target
+After=syslog.target nss-user-lookup.target
 
 [Service]
 Type=forking

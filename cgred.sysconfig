@@ -1,3 +1,4 @@
 # cgrulesengd command line options. See cgrulesengd(8).
+CGROUP_LOGLEVEL="WARNING"
 OPTIONS="-s -g cgred"
 

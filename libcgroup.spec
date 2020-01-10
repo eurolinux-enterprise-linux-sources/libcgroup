@@ -5,7 +5,7 @@
 Summary: Library to control and monitor control groups
 Name: libcgroup
 Version: 0.41
-Release: 11%{?dist}
+Release: 13%{?dist}
 License: LGPLv2+
 Group: Development/Libraries
 URL: http://libcg.sourceforge.net/
@@ -32,6 +32,10 @@ Patch12: libcgroup-0.41-api.c-support-for-setting-multiline-values-in-contro.pat
 Patch13: libcgroup-0.41-api.c-fix-order-of-memory-subsystem-parameters.patch
 # resolves #1347765
 Patch14: libcgroup-0.41-api.c-fix-potential-buffer-overflow.patch
+# resolves #1406927
+Patch15: libcgroup-0.41-api.c-fix-log-level.patch
+# resolves #1384390
+Patch16: libcgroup-0.41-api.c-preserve-dirty-flag.patch
 
 BuildRequires: byacc, coreutils, flex, pam-devel, systemd
 Requires(pre): shadow-utils
@@ -90,6 +94,8 @@ provide scripts to manage that configuration.
 %patch12 -p1
 %patch13 -p1
 %patch14 -p1
+%patch15 -p1
+%patch16 -p1
 
 %build
 %configure --enable-pam-module-dir=%{_libdir}/security \
@@ -210,6 +216,15 @@ fi
 %{_libdir}/pkgconfig/libcgroup.pc
 
 %changelog
+* Thu Mar 16 2017 Nikola Forró <nforro@redhat.com> - 0.41-13
+- resolves: #1384390
+  preserve dirty flag when copying controller values
+
+* Tue Jan 24 2017 Nikola Forró <nforro@redhat.com> - 0.41-12
+- resolves: #1406927
+  start cgred service after nss-user-lookup target
+  show warnings about unsuccessful user/group lookups
+
 * Thu Jun 23 2016 Nikola Forró <nforro@redhat.com> - 0.41-11
 - resolves: #1347765
   fix potential buffer overflow

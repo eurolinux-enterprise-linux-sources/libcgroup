@@ -1,0 +1,24 @@
+From c065903104c4d28b1ad0166f84fd6b19e0cf301e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Nikola=20Forr=C3=B3?= <nforro@redhat.com>
+Date: Thu, 16 Mar 2017 14:58:27 +0100
+Subject: [PATCH] src/api.c: preserve dirty flag when copying controller values
+
+---
+ src/api.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/api.c b/src/api.c
+index 931fb3e..e9500e0 100644
+--- a/src/api.c
++++ b/src/api.c
+@@ -1594,6 +1594,7 @@ static int cgroup_copy_controller_values(struct cgroup_controller *dst,
+ 		dst_val = dst->values[i];
+ 		strncpy(dst_val->value, src_val->value, CG_VALUE_MAX);
+ 		strncpy(dst_val->name, src_val->name, FILENAME_MAX);
++		dst_val->dirty = src_val->dirty;
+ 	}
+ err:
+ 	return ret;
+-- 
+2.7.4
+
