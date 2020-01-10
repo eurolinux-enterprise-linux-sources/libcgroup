@@ -5,7 +5,7 @@
 Summary: Library to control and monitor control groups
 Name: libcgroup
 Version: 0.41
-Release: 13%{?dist}
+Release: 15%{?dist}
 License: LGPLv2+
 Group: Development/Libraries
 URL: http://libcg.sourceforge.net/
@@ -36,6 +36,8 @@ Patch14: libcgroup-0.41-api.c-fix-potential-buffer-overflow.patch
 Patch15: libcgroup-0.41-api.c-fix-log-level.patch
 # resolves #1384390
 Patch16: libcgroup-0.41-api.c-preserve-dirty-flag.patch
+# resolves #1505443
+Patch17: libcgroup-0.41-infinite-loop.patch
 
 BuildRequires: byacc, coreutils, flex, pam-devel, systemd
 Requires(pre): shadow-utils
@@ -96,6 +98,7 @@ provide scripts to manage that configuration.
 %patch14 -p1
 %patch15 -p1
 %patch16 -p1
+%patch17 -p1
 
 %build
 %configure --enable-pam-module-dir=%{_libdir}/security \
@@ -181,11 +184,11 @@ fi
 
 %files tools
 %doc COPYING README README_systemd
-%config(noreplace) %{_sysconfdir}/cgconfig.conf
-%config(noreplace) %{_sysconfdir}/cgconfig.d
-%config(noreplace) %{_sysconfdir}/cgrules.conf
-%config(noreplace) %{_sysconfdir}/cgsnapshot_blacklist.conf
-%config(noreplace) %{_sysconfdir}/sysconfig/cgred
+%config(noreplace) %verify(not md5 size mtime) %{_sysconfdir}/cgconfig.conf
+%config(noreplace) %verify(not md5 size mtime) %{_sysconfdir}/cgconfig.d
+%config(noreplace) %verify(not md5 size mtime) %{_sysconfdir}/cgrules.conf
+%config(noreplace) %verify(not md5 size mtime) %{_sysconfdir}/cgsnapshot_blacklist.conf
+%config(noreplace) %verify(not md5 size mtime) %{_sysconfdir}/sysconfig/cgred
 /usr/bin/cgcreate
 /usr/bin/cgget
 /usr/bin/cgset
@@ -216,6 +219,14 @@ fi
 %{_libdir}/pkgconfig/libcgroup.pc
 
 %changelog
+* Tue Oct 24 2017 Nikola Forró <nforro@redhat.com> - 0.41-15
+- resolves: #1464015
+  do not verify size, mtime and checksum of config files
+
+* Tue Oct 24 2017 Nikola Forró <nforro@redhat.com> - 0.41-14
+- resolves: #1505443
+  fix infinite loop
+
 * Thu Mar 16 2017 Nikola Forró <nforro@redhat.com> - 0.41-13
 - resolves: #1384390
   preserve dirty flag when copying controller values
