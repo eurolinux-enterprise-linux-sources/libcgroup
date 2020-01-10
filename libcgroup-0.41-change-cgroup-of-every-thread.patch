@@ -1,0 +1,74 @@
+From c9d651cfd532da6494dab03190c0a207cdf7289c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Nikola=20Forr=C3=B3?= <nforro@redhat.com>
+Date: Mon, 23 Jul 2018 17:38:26 +0200
+Subject: [PATCH] api.c: always move all tasks of a process to a cgroup
+
+---
+ src/api.c | 40 ++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 38 insertions(+), 2 deletions(-)
+
+diff --git a/src/api.c b/src/api.c
+index 803ff35..a2cf981 100644
+--- a/src/api.c
++++ b/src/api.c
+@@ -3180,7 +3180,12 @@ int cgroup_change_cgroup_path(const char *dest, pid_t pid,
+ 				const char *const controllers[])
+ {
+ 	int ret;
++	int nr;
+ 	struct cgroup cgroup;
++	DIR *dir;
++	struct dirent *task_dir = NULL;
++	char path[FILENAME_MAX];
++	pid_t tid;
+ 
+ 	if (!cgroup_initialized) {
+ 		cgroup_warn("Warning: libcgroup is not initialized\n");
+@@ -3191,11 +3196,42 @@ int cgroup_change_cgroup_path(const char *dest, pid_t pid,
+ 	ret = cg_prepare_cgroup(&cgroup, pid, dest, controllers);
+ 	if (ret)
+ 		return ret;
+-	/* Add task to cgroup */
++	/* Add process to cgroup */
+ 	ret = cgroup_attach_task_pid(&cgroup, pid);
+-	if (ret)
++	if (ret) {
+ 		cgroup_warn("Warning: cgroup_attach_task_pid failed: %d\n",
+ 				ret);
++		goto finished;
++	}
++
++	/* Add all threads to cgroup */
++	snprintf(path, FILENAME_MAX, "/proc/%d/task/", pid);
++	dir = opendir(path);
++	if (!dir) {
++		last_errno = errno;
++		ret = ECGOTHER;
++		goto finished;
++	}
++
++	while ((task_dir = readdir(dir)) != NULL) {
++		nr = sscanf(task_dir->d_name, "%i", &tid);
++		if (nr < 1)
++			continue;
++
++		if (tid == pid)
++			continue;
++
++		ret = cgroup_attach_task_pid(&cgroup, tid);
++		if (ret) {
++			cgroup_warn("Warning: cgroup_attach_task_pid failed: %d\n",
++					ret);
++			break;
++		}
++	}
++
++	closedir(dir);
++
++finished:
+ 	cgroup_free_controllers(&cgroup);
+ 	return ret;
+ }
+-- 
+2.17.1
+

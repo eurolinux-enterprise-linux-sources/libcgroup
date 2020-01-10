@@ -5,7 +5,7 @@
 Summary: Library to control and monitor control groups
 Name: libcgroup
 Version: 0.41
-Release: 15%{?dist}
+Release: 20%{?dist}
 License: LGPLv2+
 Group: Development/Libraries
 URL: http://libcg.sourceforge.net/
@@ -38,6 +38,13 @@ Patch15: libcgroup-0.41-api.c-fix-log-level.patch
 Patch16: libcgroup-0.41-api.c-preserve-dirty-flag.patch
 # resolves #1505443
 Patch17: libcgroup-0.41-infinite-loop.patch
+# resolves #1549175
+Patch18: libcgroup-0.41-increase-size-of-controller-values.patch
+# resolves #1561736
+Patch19: libcgroup-0.41-api.c-tasks-file-warning.patch
+Patch20: libcgroup-0.41-cgrules.conf.5-extend-controllers-description.patch
+# resolves #1568354
+Patch21: libcgroup-0.41-change-cgroup-of-every-thread.patch
 
 BuildRequires: byacc, coreutils, flex, pam-devel, systemd
 Requires(pre): shadow-utils
@@ -99,6 +106,10 @@ provide scripts to manage that configuration.
 %patch15 -p1
 %patch16 -p1
 %patch17 -p1
+%patch18 -p1
+%patch19 -p1
+%patch20 -p1
+%patch21 -p1
 
 %build
 %configure --enable-pam-module-dir=%{_libdir}/security \
@@ -219,6 +230,27 @@ fi
 %{_libdir}/pkgconfig/libcgroup.pc
 
 %changelog
+* Wed Sep 05 2018 Nikola Forró <nforro@redhat.com> - 0.41-20
+- always move all tasks of a process to a cgroup
+  related: #1568354
+
+* Fri May 25 2018 Nikola Forró <nforro@redhat.com> - 0.41-19
+- change cgroup of every thread of a process
+  resolves: #1568354
+
+* Wed Apr 25 2018 Nikola Forró <nforro@redhat.com> - 0.41-18
+- fix wrong format in fprintf call that causes compiler warning
+  related: #1549175
+
+* Wed Apr 25 2018 Nikola Forró <nforro@redhat.com> - 0.41-17
+- show warning when "tasks" file can not be opened
+- extend description of "controllers" section in cgrules.conf man page
+  resolves: #1561736
+
+* Tue Apr 17 2018 Nikola Forró <nforro@redhat.com> - 0.41-16
+- increase maximal size of controller values
+  resolves: #1549175
+
 * Tue Oct 24 2017 Nikola Forró <nforro@redhat.com> - 0.41-15
 - resolves: #1464015
   do not verify size, mtime and checksum of config files

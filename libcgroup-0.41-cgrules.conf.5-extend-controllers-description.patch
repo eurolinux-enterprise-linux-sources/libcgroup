@@ -1,0 +1,15 @@
+diff --git a/doc/man/cgrules.conf.5 b/doc/man/cgrules.conf.5
+index 7a89fb5..dd222a9 100644
+--- a/doc/man/cgrules.conf.5
++++ b/doc/man/cgrules.conf.5
+@@ -50,6 +50,10 @@ can be:
+ .nf
+     - comma separated controller names (no spaces) or 
+     - * (for all mounted controllers)
++
++    make sure to define only controllers that are configured
++    for the matching \fIdestination\fR in \fBcgconfig.conf\fR,
++    otherwise the rule can fail
+ .fi
+ 
+ .I destination

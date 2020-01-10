@@ -1,0 +1,113 @@
+diff --git a/src/api.c b/src/api.c
+index aa912b6..a98e829 100644
+--- a/src/api.c
++++ b/src/api.c
+@@ -1592,7 +1592,7 @@ static int cgroup_copy_controller_values(struct cgroup_controller *dst,
+ 		}
+ 
+ 		dst_val = dst->values[i];
+-		strncpy(dst_val->value, src_val->value, CG_VALUE_MAX);
++		strncpy(dst_val->value, src_val->value, CG_CONTROL_VALUE_MAX);
+ 		strncpy(dst_val->name, src_val->name, FILENAME_MAX);
+ 		dst_val->dirty = src_val->dirty;
+ 	}
+@@ -2317,7 +2317,7 @@ static int cg_rd_ctrl_file(const char *subsys, const char *cgroup,
+ 	if (ctrl_file < 0)
+ 		return ECGROUPVALUENOTEXIST;
+ 
+-	*value = calloc(CG_VALUE_MAX, 1);
++	*value = calloc(CG_CONTROL_VALUE_MAX, 1);
+ 	if (!*value) {
+ 		close(ctrl_file);
+ 		last_errno = errno;
+@@ -2328,7 +2328,7 @@ static int cg_rd_ctrl_file(const char *subsys, const char *cgroup,
+ 	 * using %as or fread crashes when we try to read from files like
+ 	 * memory.stat
+ 	 */
+-	ret = read(ctrl_file, *value, CG_VALUE_MAX-1);
++	ret = read(ctrl_file, *value, CG_CONTROL_VALUE_MAX-1);
+ 	if (ret < 0) {
+ 		free(*value);
+ 		*value = NULL;
+diff --git a/src/libcgroup-internal.h b/src/libcgroup-internal.h
+index c128788..7a761a5 100644
+--- a/src/libcgroup-internal.h
++++ b/src/libcgroup-internal.h
+@@ -32,6 +32,9 @@ __BEGIN_DECLS
+ /* Estimated number of groups created */
+ #define MAX_GROUP_ELEMENTS	128
+ 
++/* Maximum length of a value */
++#define CG_CONTROL_VALUE_MAX 4096
++
+ #define CG_NV_MAX 100
+ #define CG_CONTROLLER_MAX 100
+ /* Max number of mounted hierarchies. Event if one controller is mounted per
+@@ -76,7 +79,7 @@ __BEGIN_DECLS
+ 
+ struct control_value {
+ 	char name[FILENAME_MAX];
+-	char value[CG_VALUE_MAX];
++	char value[CG_CONTROL_VALUE_MAX];
+ 	bool dirty;
+ };
+ 
+diff --git a/src/tools/cgset.c b/src/tools/cgset.c
+index ea9f90d..3d3c8cc 100644
+--- a/src/tools/cgset.c
++++ b/src/tools/cgset.c
+@@ -151,8 +151,8 @@ int main(int argc, char *argv[])
+ 				goto err;
+ 			}
+ 
+-			strncpy(name_value[nv_number].value, buf, CG_VALUE_MAX);
+-			name_value[nv_number].value[CG_VALUE_MAX-1] = '\0';
++			strncpy(name_value[nv_number].value, buf, CG_CONTROL_VALUE_MAX);
++			name_value[nv_number].value[CG_CONTROL_VALUE_MAX-1] = '\0';
+ 
+ 			nv_number++;
+ 			break;
+diff --git a/src/wrapper.c b/src/wrapper.c
+index 3a9331f..0fe80d0 100644
+--- a/src/wrapper.c
++++ b/src/wrapper.c
+@@ -182,10 +182,10 @@ int cgroup_add_value_string(struct cgroup_controller *controller,
+ 	if (!controller)
+ 		return ECGINVAL;
+ 
+-	if (controller->index >= CG_VALUE_MAX)
++	if (controller->index >= CG_NV_MAX)
+ 		return ECGMAXVALUESEXCEEDED;
+ 
+-	for (i = 0; i < controller->index && i < CG_VALUE_MAX; i++) {
++	for (i = 0; i < controller->index && i < CG_NV_MAX; i++) {
+ 		if (!strcmp(controller->values[i]->name, name))
+ 			return ECGVALUEEXISTS;
+ 	}
+@@ -195,8 +195,15 @@ int cgroup_add_value_string(struct cgroup_controller *controller,
+ 	if (!cntl_value)
+ 		return ECGCONTROLLERCREATEFAILED;
+ 
+-	strncpy(cntl_value->name, name, sizeof(cntl_value->name));
+-	strncpy(cntl_value->value, value, sizeof(cntl_value->value));
++	if (strlen(value) >= sizeof(cntl_value->value)) {
++		fprintf(stderr, "value exceeds the maximum of %lu characters\n",
++			sizeof(cntl_value->value));
++		free(cntl_value);
++		return ECGCONFIGPARSEFAIL;
++	}
++
++	strncpy(cntl_value->name, name, sizeof(cntl_value->name) - 1);
++	strncpy(cntl_value->value, value, sizeof(cntl_value->value) - 1);
+ 	cntl_value->dirty = true;
+ 	controller->values[controller->index] = cntl_value;
+ 	controller->index++;
+@@ -406,7 +413,7 @@ int cgroup_set_value_string(struct cgroup_controller *controller,
+ 	for (i = 0; i < controller->index; i++) {
+ 		struct control_value *val = controller->values[i];
+ 		if (!strcmp(val->name, name)) {
+-			strncpy(val->value, value, CG_VALUE_MAX);
++			strncpy(val->value, value, CG_CONTROL_VALUE_MAX - 1);
+ 			val->dirty = true;
+ 			return 0;
+ 		}
