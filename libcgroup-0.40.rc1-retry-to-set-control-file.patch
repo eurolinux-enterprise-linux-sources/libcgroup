@@ -1,0 +1,85 @@
+From c81248e53bd43a2132ce0b0a5aee4951c8618b6f Mon Sep 17 00:00:00 2001
+From: Jan Chaloupka <jchaloup@redhat.com>
+Date: Thu, 7 Aug 2014 07:17:23 +0200
+Subject: [PATCH] retry to set control file
+
+---
+ src/api.c | 35 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 35 insertions(+)
+
+diff --git a/src/api.c b/src/api.c
+index ae8396e..03c8068 100644
+--- a/src/api.c
++++ b/src/api.c
+@@ -1432,6 +1432,8 @@ static int cg_set_control_value(char *path, const char *val)
+ 	return 0;
+ }
+ 
++
++
+ /** cgroup_modify_cgroup modifies the cgroup control files.
+  * struct cgroup *cgroup: The name will be the cgroup to be modified.
+  * The values will be the values to be modified, those not mentioned
+@@ -1449,6 +1451,9 @@ int cgroup_modify_cgroup(struct cgroup *cgroup)
+ 	int i;
+ 	int error = 0;
+ 	int ret;
++	int retry_list[CG_CONTROLLER_MAX];
++	int retry_index;
++	struct control_value **cvalues;
+ 
+ 	if (!cgroup_initialized)
+ 		return ECGROUPNOTINITIALIZED;
+@@ -1469,6 +1474,8 @@ int cgroup_modify_cgroup(struct cgroup *cgroup)
+ 		if (!cg_build_path(cgroup->name, base,
+ 			cgroup->controller[i]->name))
+ 			continue;
++
++		retry_index = -1;
+ 		for (j = 0; j < cgroup->controller[i]->index; j++) {
+ 			ret = asprintf(&path, "%s%s", base,
+ 				cgroup->controller[i]->values[j]->name);
+@@ -1485,12 +1492,40 @@ int cgroup_modify_cgroup(struct cgroup *cgroup)
+ 			 * the user as fatal */
+ 			if (error && !cgroup->controller[i]->values[j]->dirty) {
+ 				error = 0;
++				/* Let's retry to set it in the second round */
++				++retry_index;
++				retry_list[retry_index] = j;
+ 				continue;
+ 			}
+ 			if (error)
+ 				goto err;
+ 			cgroup->controller[i]->values[j]->dirty = false;
+ 		}
++		if (retry_index > -1) {
++			for (j = 0; j <= retry_index; j++) {
++				cvalues = cgroup->controller[i]->values;
++				ret = asprintf(&path, "%s%s", base,
++					cvalues[retry_list[j]]->name);
++				if (ret < 0) {
++					last_errno = errno;
++					error = ECGOTHER;
++					goto err;
++				}
++				error = cg_set_control_value(path,
++					cvalues[retry_list[j]]->value);
++				free(path);
++				path = NULL;
++				/* don't consider error in files directly
++				 * written by the user as fatal */
++				if (error && !cvalues[retry_list[j]]->dirty) {
++					error = 0;
++					continue;
++				}
++				if (error)
++					goto err;
++				cvalues[retry_list[j]]->dirty = false;
++			}
++		}
+ 	}
+ err:
+ 	return error;
+-- 
+1.9.3
+

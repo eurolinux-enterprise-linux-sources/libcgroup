@@ -1,0 +1,280 @@
+From d58a95615a146f868106411aecd61af182d7c7e2 Mon Sep 17 00:00:00 2001
+From: Jan Chaloupka <jchaloup@redhat.com>
+Date: Sun, 21 Sep 2014 12:05:11 +0200
+Subject: [PATCH] add examples to man pages
+
+---
+ doc/man/cgclassify.1     | 18 ++++++++++++++++++
+ doc/man/cgclear.1        | 21 ++++++++++++++++++++-
+ doc/man/cgconfig.conf.5  |  5 +----
+ doc/man/cgconfigparser.8 | 14 ++++++++++++++
+ doc/man/cgcreate.1       |  9 ++++++++-
+ doc/man/cgdelete.1       |  8 +++++++-
+ doc/man/cgred.conf.5     |  2 +-
+ doc/man/cgrulesengd.8    |  3 ---
+ doc/man/cgset.1          | 11 +++++++++++
+ doc/man/cgsnapshot.1     | 15 ++++++++++++++-
+ doc/man/lscgroup.1       | 15 +++++++++++++++
+ 11 files changed, 109 insertions(+), 12 deletions(-)
+
+diff --git a/doc/man/cgclassify.1 b/doc/man/cgclassify.1
+index db4e086..1facd2b 100644
+--- a/doc/man/cgclassify.1
++++ b/doc/man/cgclassify.1
+@@ -57,7 +57,25 @@ controls verbosity of the tool. Allowed values are \fBDEBUG\fR,
+ .TP
+ .B /etc/cgrules.conf
+ default libcgroup configuration file
++.TP
++.B /etc/cgrules.d
++default libcgroup configuration files directory
++
++.SH EXAMPLES
++.TP
++.B cgclassify -g cpu:student 1234
++moves process with pid number 1234 to control group student in cpu hierarchy.
+ 
++.TP
++.B cgclassify 1234
++moves process with pid number 1234 to control groups based on
++\fB/etc/cgrules.conf\fR configuration file.
++
++.TP
++.B cgclassify --sticky -g cpu:/student 1234
++moves process with pid number 1234 to control group student in cpu hierarchy.
++The daemon of service cgred does not change cgroups of pid 1234 and its children
++(based on \fB/etc/cgrules.conf\fR).
+ 
+ .SH SEE ALSO
+ cgrules.conf (5), cgexec (1)
+diff --git a/doc/man/cgclear.1 b/doc/man/cgclear.1
+index 318c925..241a095 100644
+--- a/doc/man/cgclear.1
++++ b/doc/man/cgclear.1
+@@ -43,5 +43,24 @@ option works only with \fB-l\fR or \fB-L\fR options.
+ controls verbosity of the tool. Allowed values are \fBDEBUG\fR,
+ \fBINFO\fR, \fBWARNING\fR or \fBERROR\fR.
+ 
++.SH FILES
++.TP
++.B /etc/cgconfig.conf
++default templates file
++.TP
++.B /etc/cgconfig.d/
++default templates files directory
++.RE
++
++
++.SH EXAMPLES
++.TP
++.B cgclear
++unload the whole cgroup filesystem
++
++.TP
++.B cgclear -l /etc/cgconfig.conf
++unload a subsystem of cgroup filesystem based on \fB/etc/cgconfig.conf\fR definition.
++
+ .SH SEE ALSO
+-cgconfigparser(1)
++cgconfigparser(1), cgconfig.conf(5)
+diff --git a/doc/man/cgconfig.conf.5 b/doc/man/cgconfig.conf.5
+index a7d9935..f3a4ba9 100644
+--- a/doc/man/cgconfig.conf.5
++++ b/doc/man/cgconfig.conf.5
+@@ -784,15 +784,12 @@ better to explicitly specify all groups and all controllers
+ related to them.
+ 
+ .SH FILES
+-.LP
+-.PD .1v
+ .TP
+ .B /etc/cgconfig.conf
+-.TP
+ default libcgroup configuration file
++.TP
+ .B /etc/cgconfig.d/
+ default libcgroup configuration files directory
+-.PD 
+ 
+ .SH SEE ALSO
+ cgconfigparser (8)
+diff --git a/doc/man/cgconfigparser.8 b/doc/man/cgconfigparser.8
+index 0a20f95..8fff95f 100644
+--- a/doc/man/cgconfigparser.8
++++ b/doc/man/cgconfigparser.8
+@@ -74,5 +74,19 @@ of this group have write access to the file.
+ controls verbosity of the tool. Allowed values are \fBDEBUG\fR,
+ \fBINFO\fR, \fBWARNING\fR or \fBERROR\fR.
+ 
++.SH FILES
++.TP
++.B /etc/cgconfig.conf
++default libcgroup configuration file
++.TP
++.B /etc/cgconfig.d/
++default libcgroup configuration files directory
++
++.SH EXAMPLES
++.TP
++.B cgconfigparser -l /etc/cgconfig.conf
++setup control group file system based on \fB/etc/cgconfig.conf\fR configuration file
++
++
+ .SH SEE ALSO
+ cgconfig.conf (5)
+diff --git a/doc/man/cgcreate.1 b/doc/man/cgcreate.1
+index 557b5ae..17c33d8 100644
+--- a/doc/man/cgcreate.1
++++ b/doc/man/cgcreate.1
+@@ -70,7 +70,14 @@ The default value is the same as has the parent cgroup.
+ controls verbosity of the tool. Allowed values are \fBDEBUG\fR,
+ \fBINFO\fR, \fBWARNING\fR or \fBERROR\fR.
+ 
+-.SH FILES
++.SH EXAMPLES
++.TP
++.B cgcreate -g *:student -g devices:teacher
++create control group student in all mounted hierarchies and create
++control group teacher in hierarchy containing controller devices.
++
++
++
+ 
+ .SH SEE ALSO
+ cgrules.conf (5)
+diff --git a/doc/man/cgdelete.1 b/doc/man/cgdelete.1
+index 025a799..9572287 100644
+--- a/doc/man/cgdelete.1
++++ b/doc/man/cgdelete.1
+@@ -16,7 +16,7 @@ program removes all specified control groups.
+ 
+ .TP
+ .B [-g] <controllers>:<path>
+-Defines the control group to delete. Multiple control groups nay be
++Defines the control group to delete. Multiple control groups may be
+ specified.
+ .B -g
+ is optional.
+@@ -35,5 +35,11 @@ Recursively remove all subgroups.
+ controls verbosity of the tool. Allowed values are \fBDEBUG\fR,
+ \fBINFO\fR, \fBWARNING\fR or \fBERROR\fR.
+ 
++.SH EXAMPLES
++.TP
++.B cgdelete -g cpu,devices:/test
++remove control group test from hierarchies containing cpu and device controllers
++
++
+ .SH SEE ALSO
+ cgcreate (1), lscgroup (1), cgclear (1)
+diff --git a/doc/man/cgred.conf.5 b/doc/man/cgred.conf.5
+index 3fe760f..1c0922f 100644
+--- a/doc/man/cgred.conf.5
++++ b/doc/man/cgred.conf.5
+@@ -42,7 +42,7 @@ default libcgroup configuration file
+ 
+ .SH SEE ALSO
+ cgrules.conf (5),
+-cgconfig.conf (5)
++cgconfig.conf (5), cgrules.d (5)
+ 
+ 
+ 
+diff --git a/doc/man/cgrulesengd.8 b/doc/man/cgrulesengd.8
+index 749b6fc..2810aa5 100644
+--- a/doc/man/cgrulesengd.8
++++ b/doc/man/cgrulesengd.8
+@@ -63,11 +63,8 @@ controls verbosity of the tool. Allowed values are \fBDEBUG\fR,
+ \fBINFO\fR, \fBWARNING\fR or \fBERROR\fR.
+ 
+ .SH FILES
+-.LP
+-.PD .1v
+ .TP
+ .B /etc/cgrules.conf
+-.TP
+ the default libcgroup configuration file
+ .TP
+ .B /etc/cgconfig.conf
+diff --git a/doc/man/cgset.1 b/doc/man/cgset.1
+index be886c6..b05473f 100644
+--- a/doc/man/cgset.1
++++ b/doc/man/cgset.1
+@@ -36,5 +36,16 @@ copied to the input cgroup.
+ controls verbosity of the tool. Allowed values are \fBDEBUG\fR,
+ \fBINFO\fR, \fBWARNING\fR or \fBERROR\fR.
+ 
++.SH EXAMPLES
++.TP
++.B cgset -r cpuset.cpus=0-1 student
++set variable cpus in control group student (controller cpuset) to 0-1
++
++.TP
++.B cgset --copy-from group1/ group2/
++copy all parameters of group group1 to group group2
++(for all path where both cgroups are defined)
++
++
+ .SH SEE ALSO
+ cgrules.conf (1), cgcreate (1), cgget (1)
+diff --git a/doc/man/cgsnapshot.1 b/doc/man/cgsnapshot.1
+index 03c85f6..48a038e 100644
+--- a/doc/man/cgsnapshot.1
++++ b/doc/man/cgsnapshot.1
+@@ -8,7 +8,7 @@ cgsnapshot \- generate the configuration file for given controllers
+ 
+ .SH SYNOPSIS
+ \fBcgsnapshot\fR [\fB-h\fR] [\fB-s\fR] [\fB-t\fR] [\fB-b\fR \fIfile\fR]
+-[\fB-w\fR \fIfile\fR] [\fB-f\fR \fIoutput_file\fR]  [\fBcontroller\fR] [...]
++[\fB-w\fR \fIfile\fR] [\fB-f\fR \fIoutput_file\fR] [\fBcontroller\fR] [...]
+ 
+ .SH DESCRIPTION
+ \fBcgsnapshot\fR
+@@ -96,5 +96,18 @@ default whitelist
+ .B /etc/cgconfig.conf
+ default libcgroup configuration file
+ 
++.SH EXAMPLES
++.TP
++.B cgsnapshot -s -f /etc/cgconfig.conf.cgsnapshot
++create configuration file which contains all mounted controllers and all
++control groups which are on the actual system
++
++.TP
++.B cgsnapshot -s -f /etc/cgconfig.conf.cgsnapshot cpu
++create configuration file which contains hierarchy containing cpu controller and all its
++control groups on the actual system
++
++
++
+ .SH SEE ALSO
+ cgconfig.conf (5)
+diff --git a/doc/man/lscgroup.1 b/doc/man/lscgroup.1
+index 693fbbc..124379e 100644
+--- a/doc/man/lscgroup.1
++++ b/doc/man/lscgroup.1
+@@ -26,6 +26,21 @@ list all existing cgroups.
+ controls verbosity of the tool. Allowed values are \fBDEBUG\fR,
+ \fBINFO\fR, \fBWARNING\fR or \fBERROR\fR.
+ 
++.SH EXAMPLES
++.TP
++.B lscgroup -g cpu:/
++list all cgroups which are in hierarchy containing cpu controller
++
++.TP
++.B lscgroup -g cpu:/student
++list all cgroups which are in hierarchy containing cpu controller
++in subgroup student
++
++.TP
++.B lscgroup
++list all cgroups which in all hierarchies
++
++
+ .SH SEE ALSO
+ lssubsys (1), cgcreate (1), cgdelete (1),
+ cgconfig.conf (5)
+-- 
+1.9.3
+

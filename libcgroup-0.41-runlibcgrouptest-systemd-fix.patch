@@ -1,0 +1,39 @@
+From 92597b479aeb46c6dc630353de16328c365ff083 Mon Sep 17 00:00:00 2001
+From: jchaloup <jchaloup@redhat.com>
+Date: Fri, 14 Feb 2014 10:29:33 +0100
+Subject: [PATCH] runlibcgrouptest script updated to ignore systemd
+
+---
+ tests/runlibcgrouptest.sh    | 2 +-
+ tests/runlibcgrouptest.sh.in | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/tests/runlibcgrouptest.sh b/tests/runlibcgrouptest.sh
+index 221729c..605f045 100644
+--- a/tests/runlibcgrouptest.sh
++++ b/tests/runlibcgrouptest.sh
+@@ -48,7 +48,7 @@ debug()
+ check_mount_fs ()
+ {
+ 	local NUM_MOUNT=0;
+-	CGROUP=`cat /proc/mounts|grep -w ^cgroup|tr -s [:space:]|cut -d" " -f3`;
++	CGROUP=`cat /proc/mounts|grep -w ^cgroup|grep -v systemd|tr -s [:space:]|cut -d" " -f3`;
+ 
+ 	# get first word in case of multiple mounts
+ 	CGROUP=`echo $CGROUP|cut -d" " -f1`;
+diff --git a/tests/runlibcgrouptest.sh.in b/tests/runlibcgrouptest.sh.in
+index 119addd..8a57881 100755
+--- a/tests/runlibcgrouptest.sh.in
++++ b/tests/runlibcgrouptest.sh.in
+@@ -48,7 +48,7 @@ debug()
+ check_mount_fs ()
+ {
+ 	local NUM_MOUNT=0;
+-	CGROUP=`cat /proc/mounts|grep -w ^cgroup|tr -s [:space:]|cut -d" " -f3`;
++	CGROUP=`cat /proc/mounts|grep -w ^cgroup|grep -v systemd|tr -s [:space:]|cut -d" " -f3`;
+ 
+ 	# get first word in case of multiple mounts
+ 	CGROUP=`echo $CGROUP|cut -d" " -f1`;
+-- 
+1.8.5.3
+

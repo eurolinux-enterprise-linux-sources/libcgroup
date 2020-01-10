@@ -1,0 +1,65 @@
+From c3b2fbe31273ea71a02c86e780f0f3c0a0fa845f Mon Sep 17 00:00:00 2001
+From: Jan Chaloupka <jchaloup@redhat.com>
+Date: Sat, 20 Sep 2014 23:46:57 +0200
+Subject: [PATCH] extending cgroup names with default
+
+---
+ src/lex.l   |  2 +-
+ src/parse.y | 14 ++++++++++++--
+ 2 files changed, 13 insertions(+), 3 deletions(-)
+
+diff --git a/src/lex.l b/src/lex.l
+index 1b357db..ff2b3e5 100644
+--- a/src/lex.l
++++ b/src/lex.l
+@@ -42,7 +42,7 @@ jmp_buf parser_error_env;
+ "group"		{return GROUP;}
+ "namespace"	{return NAMESPACE;}
+ "template"	{return TEMPLATE;}
+-"default"	{return DEFAULT;}
++"default"	{yylval.name = strdup(yytext); return DEFAULT;}
+ [a-zA-Z0-9_\-\/\.\,\%\@]+ {yylval.name = strdup(yytext); return ID;}
+ \"[^"]*\" {yylval.name = strdup(yytext+1); yylval.name[strlen(yylval.name)-1] = '\0'; return ID; }
+ .	{return yytext[0];}
+diff --git a/src/parse.y b/src/parse.y
+index 9adbc0e..e67ad54 100644
+--- a/src/parse.y
++++ b/src/parse.y
+@@ -45,7 +45,7 @@ int yywrap(void)
+ 	int val;
+ 	struct cgroup_dictionary *values;
+ }
+-%type <name> ID
++%type <name> ID DEFAULT group_name
+ %type <val> mountvalue_conf mount task_namevalue_conf admin_namevalue_conf
+ %type <val> admin_conf task_conf task_or_admin group_conf group start
+ %type <val> namespace namespace_conf default default_conf
+@@ -99,7 +99,7 @@ default_conf
+ 	}
+ 	;
+ 
+-group   :       GROUP ID '{' group_conf '}'
++group   :       GROUP group_name '{' group_conf '}'
+ 	{
+ 		$$ = $4;
+ 		if ($$) {
+@@ -119,6 +119,16 @@ group   :       GROUP ID '{' group_conf '}'
+ 	}
+         ;
+ 
++group_name
++	:	ID
++	{
++		$$ = $1;
++	}
++	|	DEFAULT
++	{
++		$$ = $1;
++	}
++
+ group_conf
+         :       ID '{' namevalue_conf '}'
+ 	{
+-- 
+1.9.3
+

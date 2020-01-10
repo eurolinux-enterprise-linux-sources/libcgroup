@@ -1,0 +1,179 @@
+From 2102de58417416a3051fee17e012964b56971fb3 Mon Sep 17 00:00:00 2001
+From: Jan Chaloupka <jchaloup@redhat.com>
+Date: Sat, 20 Sep 2014 19:13:01 +0200
+Subject: [PATCH] use * character as a meta character for all mounted
+ controllers
+
+---
+ doc/man/cgcreate.1         |  3 ++-
+ include/libcgroup/groups.h | 10 ++++++++++
+ src/libcgroup.map          |  7 +++++++
+ src/tools/cgcreate.c       | 32 +++++++++++++++++++----------
+ src/wrapper.c              | 50 ++++++++++++++++++++++++++++++++++++++++++++++
+ 5 files changed, 91 insertions(+), 11 deletions(-)
+
+diff --git a/doc/man/cgcreate.1 b/doc/man/cgcreate.1
+index 7068073..557b5ae 100644
+--- a/doc/man/cgcreate.1
++++ b/doc/man/cgcreate.1
+@@ -38,7 +38,8 @@ others permissions to the owners permissions).
+ .TP
+ .B -g <controllers>:<path>
+ defines control groups to be added.
+-\fBcontrollers\fR is a list of controllers and
++\fBcontrollers\fR is a list of controllers. Character "*" can be used
++as a shortcut for "all mounted controllers".
+ \fBpath\fR is the relative path to control groups
+ in the given controllers list. This option can be specified
+ multiple times.
+diff --git a/include/libcgroup/groups.h b/include/libcgroup/groups.h
+index d5c87aa..201558f 100644
+--- a/include/libcgroup/groups.h
++++ b/include/libcgroup/groups.h
+@@ -150,6 +150,16 @@ struct cgroup_controller *cgroup_add_controller(struct cgroup *cgroup,
+ 						const char *name);
+ 
+ /**
++ * Attach all mounted controllers to given cgroup. This function just modifies
++ * internal libcgroup structure, not the kernel control group.
++ *
++ * @param cgroup
++ * @return zero or error number
++ */
++int cgroup_add_all_controllers(struct cgroup *cgroup);
++
++
++/**
+  * Return appropriate controller from given group.
+  * The controller must be added before using cgroup_add_controller() or loaded
+  * from kernel using cgroup_get_cgroup().
+diff --git a/src/libcgroup.map b/src/libcgroup.map
+index f8b0fb9..8fe1990 100644
+--- a/src/libcgroup.map
++++ b/src/libcgroup.map
+@@ -122,3 +122,10 @@ CGROUP_0.40 {
+ 	cgroup_templates_cache_set_source_files;
+ 	cgroup_load_templates_cache_from_files;
+ } CGROUP_0.39;
++
++CGROUP_0.41 {
++} CGROUP_0.40;
++
++CGROUP_0.42 {
++	cgroup_add_all_controllers;
++} CGROUP_0.41;
+diff --git a/src/tools/cgcreate.c b/src/tools/cgcreate.c
+index 73abd91..65b188a 100644
+--- a/src/tools/cgcreate.c
++++ b/src/tools/cgcreate.c
+@@ -54,7 +54,6 @@ static void usage(int status, const char *program_name)
+ 	printf("  -t <tuid>:<tgid>		Owner of the tasks file\n");
+ }
+ 
+-
+ int main(int argc, char *argv[])
+ {
+ 	int ret = 0;
+@@ -195,16 +194,29 @@ int main(int argc, char *argv[])
+ 		/* add controllers to the new cgroup */
+ 		j = 0;
+ 		while (cgroup_list[i]->controllers[j]) {
+-			cgc = cgroup_add_controller(cgroup,
+-				cgroup_list[i]->controllers[j]);
+-			if (!cgc) {
+-				ret = ECGINVAL;
+-				fprintf(stderr, "%s: "
+-					"controller %s can't be add\n",
+-					argv[0],
++			if (strcmp(cgroup_list[i]->controllers[j], "*") == 0) {
++				/* it is meta character, add all controllers */
++				ret = cgroup_add_all_controllers(cgroup);
++				if (ret != 0) {
++					ret = ECGINVAL;
++					fprintf(stderr, "%s: can't add ",
++						argv[0]);
++					fprintf(stderr, "all controllers\n");
++					cgroup_free(&cgroup);
++					goto err;
++				}
++			} else {
++				cgc = cgroup_add_controller(cgroup,
+ 					cgroup_list[i]->controllers[j]);
+-				cgroup_free(&cgroup);
+-				goto err;
++				if (!cgc) {
++					ret = ECGINVAL;
++					fprintf(stderr, "%s: ", argv[0]);
++					fprintf(stderr, "controller %s",
++						cgroup_list[i]->controllers[j]);
++					fprintf(stderr, "can't be add\n");
++					cgroup_free(&cgroup);
++					goto err;
++				}
+ 			}
+ 			j++;
+ 		}
+diff --git a/src/wrapper.c b/src/wrapper.c
+index c03472a..3a9331f 100644
+--- a/src/wrapper.c
++++ b/src/wrapper.c
+@@ -92,6 +92,56 @@ struct cgroup_controller *cgroup_add_controller(struct cgroup *cgroup,
+ 	return controller;
+ }
+ 
++int cgroup_add_all_controllers(struct cgroup *cgroup)
++{
++	int ret;
++	void *handle;
++	struct controller_data info;
++	struct cgroup_controller *cgc;
++
++	/* go through the controller list */
++	ret = cgroup_get_all_controller_begin(&handle, &info);
++	if ((ret != 0) && (ret != ECGEOF)) {
++		fprintf(stderr, "cannot read controller data: %s\n",
++			cgroup_strerror(ret));
++		return ret;
++	}
++
++	while (ret == 0) {
++		if (info.hierarchy == 0) {
++			/* the controller is not attached to any hierarchy
++			   skip it */
++			goto next;
++		}
++
++		/* add mounted controller to cgroup structure */
++		cgc = cgroup_add_controller(cgroup, info.name);
++		if (!cgc) {
++			ret = ECGINVAL;
++			fprintf(stderr, "controller %s can't be add\n",
++				info.name);
++		}
++
++next:
++		ret = cgroup_get_all_controller_next(&handle, &info);
++		if (ret && ret != ECGEOF)
++			goto end;
++	}
++
++end:
++	cgroup_get_all_controller_end(&handle);
++
++	if (ret == ECGEOF)
++		ret = 0;
++
++	if (ret)
++		fprintf(stderr,
++			"cgroup_get_controller_begin/next failed (%s)\n",
++			cgroup_strerror(ret));
++
++	return ret;
++}
++
+ void cgroup_free_controllers(struct cgroup *cgroup)
+ {
+ 	int i, j;
+-- 
+1.9.3
+

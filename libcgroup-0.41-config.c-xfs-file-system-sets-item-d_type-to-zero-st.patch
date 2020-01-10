@@ -1,0 +1,58 @@
+From 982a59755252f8a263e8004a09eceb6fdfbd5242 Mon Sep 17 00:00:00 2001
+From: Jan Chaloupka <jchaloup@redhat.com>
+Date: Sat, 20 Sep 2014 21:06:33 +0200
+Subject: [PATCH] config.c: xfs file system sets item->d_type to zero, stat()
+ and S_ISREG() test added
+
+---
+ src/tools/tools-common.c | 21 ++++++++++++++++-----
+ 1 file changed, 16 insertions(+), 5 deletions(-)
+
+diff --git a/src/tools/tools-common.c b/src/tools/tools-common.c
+index 211a49a..f1b7711 100644
+--- a/src/tools/tools-common.c
++++ b/src/tools/tools-common.c
+@@ -201,17 +201,24 @@ int cgroup_string_list_add_directory(struct cgroup_string_list *list,
+ 	do {
+ 		errno = 0;
+ 		item = readdir(d);
+-		if (item && (item->d_type == DT_REG
+-				|| item->d_type == DT_LNK)) {
+-			char *tmp;
++
++		struct stat st;
++
++		char * tmp;
++
++		if (item) {
+ 			ret = asprintf(&tmp, "%s/%s", dirname, item->d_name);
+ 			if (ret < 0) {
+ 				fprintf(stderr, "%s: out of memory\n",
+ 						program_name);
+ 				exit(1);
+ 			}
+-			ret = cgroup_string_list_add_item(list, tmp);
+-			free(tmp);
++		}
++
++		if (item && (item->d_type == DT_REG
++			|| item->d_type == DT_LNK
++			|| (stat(tmp, &st) >= 0 && S_ISREG(st.st_mode)) ) ) {
++			ret = cgroup_string_list_add_item(list, tmp); 
+ 			count++;
+ 			if (ret) {
+ 				fprintf(stderr, "%s: %s\n",
+@@ -225,6 +232,10 @@ int cgroup_string_list_add_directory(struct cgroup_string_list *list,
+ 					program_name, dirname, strerror(errno));
+ 			exit(1);
+ 		}
++
++		if (item) {
++			free(tmp);
++		} 
+ 	} while (item != NULL);
+ 	closedir(d);
+ 
+-- 
+1.9.3
+
