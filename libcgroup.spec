@@ -5,7 +5,7 @@
 Summary: Library to control and monitor control groups
 Name: libcgroup
 Version: 0.41
-Release: 20%{?dist}
+Release: 21%{?dist}
 License: LGPLv2+
 Group: Development/Libraries
 URL: http://libcg.sourceforge.net/
@@ -45,6 +45,8 @@ Patch19: libcgroup-0.41-api.c-tasks-file-warning.patch
 Patch20: libcgroup-0.41-cgrules.conf.5-extend-controllers-description.patch
 # resolves #1568354
 Patch21: libcgroup-0.41-change-cgroup-of-every-thread.patch
+# resolves: #1612122
+Patch22: libcgroup-0.41-CVE-2018-14348.patch
 
 BuildRequires: byacc, coreutils, flex, pam-devel, systemd
 Requires(pre): shadow-utils
@@ -110,6 +112,7 @@ provide scripts to manage that configuration.
 %patch19 -p1
 %patch20 -p1
 %patch21 -p1
+%patch22 -p1
 
 %build
 %configure --enable-pam-module-dir=%{_libdir}/security \
@@ -230,6 +233,10 @@ fi
 %{_libdir}/pkgconfig/libcgroup.pc
 
 %changelog
+* Thu Dec 06 2018 Nikola Forró <nforro@redhat.com> - 0.41-21
+- fix CVE-2018-14348
+  resolves: #1612122
+
 * Wed Sep 05 2018 Nikola Forró <nforro@redhat.com> - 0.41-20
 - always move all tasks of a process to a cgroup
   related: #1568354
